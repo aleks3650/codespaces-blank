@@ -1,0 +1,17 @@
+services:
+  frontend:
+    build: ./client
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=https://studious-succotash-5p696gw7r543vq49-8000.app.github.dev
+
+  backend:
+    build: ./server
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./server:/app

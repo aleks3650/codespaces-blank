@@ -1,0 +1,39 @@
+{
+  // === Ustawienia dla Deno (backend) ===
+  // Włączamy linter i formater Deno tylko dla plików w katalogu 'server'
+  "deno.enablePaths": [
+    "./server"
+  ],
+
+  // === Ustawienia dla ESLint (frontend) ===
+  // Określamy, gdzie ESLint ma szukać swoich plików konfiguracyjnych
+  "eslint.workingDirectories": [
+    { "directory": "./client", "changeProcessCWD": true }
+  ],
+
+  // === Ustawienia formatowania i lintingu dla konkretnych języków ===
+  // Dla plików w projekcie Deno, domyślnym formaterem ma być Deno
+  "[typescript]": {
+    "editor.defaultFormatter": "denoland.vscode-deno"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "denoland.vscode-deno"
+  },
+
+  // Dla plików React (frontend), domyślnym formaterem ma być ESLint
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "denoland.vscode-deno"
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "dbaeumer.vscode-eslint"
+  },
+  
+  // Włączamy ESLint jako domyślny formater dla TS w katalogu klienta
+  // (jeśli VSCode sam nie wykryje kontekstu)
+  "eslint.validate": [
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact"
+  ]
+}
