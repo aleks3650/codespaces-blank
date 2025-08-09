@@ -3,7 +3,7 @@ import { socket } from "../socket/socket";
 import { useSocketStore } from "../state/Store";
 
 export function useSocketConnect() {
-  const { setTick, setTime } = useSocketStore();
+  const { gameState } = useSocketStore();
 
   useEffect(() => {
     function onConnect() {
@@ -15,8 +15,10 @@ export function useSocketConnect() {
     }
 
     function onGameState(value: { tick: number; time: string; }) {
-      setTick(value.tick);
-      setTime(value.time)
+      useSocketStore.getState().setGameState({
+        ...gameState,
+        ...value,
+      });
     }
 
     socket.on("connect", onConnect);
@@ -29,7 +31,7 @@ export function useSocketConnect() {
       socket.off("disconnect", onDisconnect);
       socket.off("gameState", onGameState); 
     };
-  }, [setTick, setTime]); 
+  }, [gameState]); 
 
   return {};
 }

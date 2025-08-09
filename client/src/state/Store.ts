@@ -1,15 +1,26 @@
 import { create } from "zustand";
 
-interface SocketState {
-  tick: number | null;
-  time: string | null;
-  setTick: (tick: number) => void;
-  setTime: (time: string) => void;
+export interface PlayerState {
+  position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number; w: number };
 }
 
-export const useSocketStore = create<SocketState>((set) => ({
-  tick: null,
-  time: null,
-  setTick: (tick) => set({ tick: tick }),
-  setTime: (time) => set({ time: time }),
+export interface GameState {
+  tick: number;
+  time: string;
+  players: Record<string, PlayerState>;
+}
+
+interface SocketStore {
+  gameState: GameState;
+  setGameState: (newState: GameState) => void;
+}
+
+export const useSocketStore = create<SocketStore>((set) => ({
+  gameState: {
+    tick: 0,
+    time: new Date().toISOString(),
+    players: {}, 
+  },
+  setGameState: (newState) => set({ gameState: newState }),
 }));
