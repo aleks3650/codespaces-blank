@@ -3,6 +3,7 @@
   "specifiers": {
     "jsr:@std/assert@*": "1.0.13",
     "jsr:@std/internal@^1.0.6": "1.0.10",
+    "npm:@dimforge/rapier3d-compat@*": "0.18.1",
     "npm:@types/node@*": "22.15.15"
   },
   "jsr": {
@@ -17,6 +18,9 @@
     }
   },
   "npm": {
+    "@dimforge/rapier3d-compat@0.18.1": {
+      "integrity": "sha512-ogfkrMpRsB0osDAqnhO6fD3s2hCrwAdNFqs36U2N0aogu38tbWDtMfxQzWqjTMkJ4x8QV402Me6fggNykZECUg=="
+    },
     "@types/node@22.15.15": {
       "integrity": "sha512-R5muMcZob3/Jjchn5LcO8jdKwSCbzqmPB6ruBxMcf9kbxtniZHP327s6C37iOfuw8mbKK3cAQa7sEl7afLrQ8A==",
       "dependencies": [

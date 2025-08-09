@@ -1,37 +1,30 @@
-import { Server } from "https://deno.land/x/socket_io@0.2.1/mod.ts";
+import RAPIER from 'npm:@dimforge/rapier3d-compat';
+import { Game } from "./src/game.ts";
+import {  MAX_TICKS, TICK_RATE } from "./src/helpers/constants.ts";
+import { io } from "./src/helpers/IO_Server.ts";
 
-const io = new Server({
-  cors: {
-    origin: true,
-    allowedHeaders: ["my-header"],
-    credentials: true,
-  },
-});
+await RAPIER.init();
 
-const TICK_RATE = 1000 / 60;
-const MAX_TICKS = 60;
+const game = new Game();
+await game.initialize(); 
+
 let tick = 0;
-
-const gameState = {
-  time: new Date().toISOString(),
-  tick: tick,
-};
 
 function gameLoop() {
   tick = (tick + 1) % MAX_TICKS;
-  gameState.tick = tick;
-  gameState.time = new Date().toISOString();
+  const liveGameState = game.update(tick);
 
-  io.emit("gameState", gameState);
+  io.emit("gameState", liveGameState);
 
   setTimeout(gameLoop, TICK_RATE);
 }
 
 io.on("connection", (socket) => {
   console.log(`socket ${socket.id} connected`);
-
+  game.addNewPlayer(socket.id); 
   socket.on("disconnect", (reason) => {
     console.log(`socket ${socket.id} disconnected due to ${reason}`);
+    game.removePlayer(socket.id);
   });
 });
 
