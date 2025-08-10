@@ -6,12 +6,12 @@ import type { PlayerState } from "../state/Store";
 const targetPosition = new THREE.Vector3();
 const targetQuaternion = new THREE.Quaternion();
 
-const Player = (props: PlayerState) => {
+const RemotePlayer = ({ position, rotation }: PlayerState) => {
     const ref = useRef<THREE.Group>(null!);
 
-    useFrame((_state, _delta) => {
-        targetPosition.set(props.position.x, props.position.y, props.position.z);
-        targetQuaternion.set(props.rotation.x, props.rotation.y, props.rotation.z, props.rotation.w);
+    useFrame(() => {
+        targetPosition.set(position.x, position.y, position.z);
+        targetQuaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
 
         ref.current.position.lerp(targetPosition, 0.2);
         ref.current.quaternion.slerp(targetQuaternion, 0.2);
@@ -20,11 +20,11 @@ const Player = (props: PlayerState) => {
     return (
         <group ref={ref}>
             <mesh>
-                <capsuleGeometry args={[0.1, 0.25]} />
+                <sphereGeometry args={[0.05]} />
                 <meshStandardMaterial color="royalblue" />
             </mesh>
         </group>
     );
 };
 
-export default Player;
+export default RemotePlayer;

@@ -1,37 +1,33 @@
 import { useEffect } from "react";
 import { socket } from "../socket/socket";
-import { useSocketStore } from "../state/Store";
+import { type GameStateFromServer, useSocketStore } from "../state/Store";
 
 export function useSocketConnect() {
-  const { gameState } = useSocketStore();
+  const setGameState = useSocketStore((state) => state.setGameState);
 
   useEffect(() => {
     function onConnect() {
-      console.log("Hook: Połączono, ID:", socket.id);
+      console.log("Hook: Connected, ID:", socket.id);
     }
 
     function onDisconnect() {
       console.log("Hook: Rozłączono");
     }
 
-    function onGameState(value: { tick: number; time: string; }) {
-      useSocketStore.getState().setGameState({
-        ...gameState,
-        ...value,
-      });
-    }
+    const onGameState = (data: GameStateFromServer) => {
+      setGameState(data);
+    };
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
-    socket.on("gameState", onGameState); 
-
+    socket.on("gameState", onGameState);
 
     return () => {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
-      socket.off("gameState", onGameState); 
+      socket.off("gameState", onGameState);
     };
-  }, [gameState]); 
+  }, [setGameState]);
 
   return {};
 }

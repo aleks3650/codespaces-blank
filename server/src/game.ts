@@ -29,4 +29,11 @@ export class Game {
       time: new Date().toISOString(),
     };
   }
+
+  public updatePlayerRotation(
+    id: string,
+    rotation: { x: number; y: number; z: number; w: number },
+  ) {
+    this.physics.setPlayerRotation(id, rotation);
+  }
 }

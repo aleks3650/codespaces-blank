@@ -4,7 +4,8 @@
     "jsr:@std/assert@*": "1.0.13",
     "jsr:@std/internal@^1.0.6": "1.0.10",
     "npm:@dimforge/rapier3d-compat@*": "0.18.1",
-    "npm:@types/node@*": "22.15.15"
+    "npm:@types/node@*": "22.15.15",
+    "npm:three@*": "0.179.1"
   },
   "jsr": {
     "@std/assert@1.0.13": {
@@ -26,6 +27,9 @@
       "dependencies": [
         "undici-types"
       ]
+    },
+    "three@0.179.1": {
+      "integrity": "sha512-5y/elSIQbrvKOISxpwXCR4sQqHtGiOI+MKLc3SsBdDXA2hz3Mdp3X59aUp8DyybMa34aeBwbFTpdoLJaUDEWSw=="
     },
     "undici-types@6.21.0": {
       "integrity": "sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ=="

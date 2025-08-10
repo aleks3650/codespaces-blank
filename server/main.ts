@@ -1,12 +1,12 @@
-import RAPIER from 'npm:@dimforge/rapier3d-compat';
+import RAPIER from "npm:@dimforge/rapier3d-compat";
 import { Game } from "./src/game.ts";
-import {  MAX_TICKS, TICK_RATE } from "./src/helpers/constants.ts";
+import { MAX_TICKS, TICK_RATE } from "./src/helpers/constants.ts";
 import { io } from "./src/helpers/IO_Server.ts";
 
 await RAPIER.init();
 
 const game = new Game();
-await game.initialize(); 
+await game.initialize();
 
 let tick = 0;
 
@@ -21,7 +21,13 @@ function gameLoop() {
 
 io.on("connection", (socket) => {
   console.log(`socket ${socket.id} connected`);
-  game.addNewPlayer(socket.id); 
+  game.addNewPlayer(socket.id);
+  socket.on(
+    "player-rotation",
+    (rotation: { x: number; y: number; z: number; w: number }) => {
+      game.updatePlayerRotation(socket.id, rotation);
+    },
+  );
   socket.on("disconnect", (reason) => {
     console.log(`socket ${socket.id} disconnected due to ${reason}`);
     game.removePlayer(socket.id);

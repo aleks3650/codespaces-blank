@@ -1,26 +1,32 @@
 import { create } from "zustand";
+import type { Vector, Quaternion } from "@dimforge/rapier3d-compat";
 
 export interface PlayerState {
-  position: { x: number; y: number; z: number };
-  rotation: { x: number; y: number; z: number; w: number };
+    position: Vector;
+    rotation: Quaternion;
 }
 
-export interface GameState {
-  tick: number;
-  time: string;
-  players: Record<string, PlayerState>;
+export interface GameStateFromServer {
+    players: { [id: string]: PlayerState };
+    tick: number;
+    time: string;
 }
 
 interface SocketStore {
-  gameState: GameState;
-  setGameState: (newState: GameState) => void;
+    players: { [id: string]: PlayerState };
+    tick: number;
+    time: string;
+    setGameState: (newState: GameStateFromServer) => void;
 }
 
 export const useSocketStore = create<SocketStore>((set) => ({
-  gameState: {
+    players: {},
     tick: 0,
-    time: new Date().toISOString(),
-    players: {}, 
-  },
-  setGameState: (newState) => set({ gameState: newState }),
+    time: "",
+    
+    setGameState: (newState) => set({
+        players: newState.players,
+        tick: newState.tick,
+        time: newState.time,
+    }),
 }));

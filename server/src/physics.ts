@@ -34,7 +34,7 @@ export class PhysicsWorld {
       .setTranslation(1.0, 5.0, 0.0);
     const body = this.world.createRigidBody(bodyDesc);
 
-    const colliderDesc = RAPIER.ColliderDesc.capsule(0.1, 0.25);
+    const colliderDesc = RAPIER.ColliderDesc.ball(0.05);
     this.world.createCollider(colliderDesc, body);
 
     this.playerBodies.set(playerId, body);
@@ -62,6 +62,17 @@ export class PhysicsWorld {
       };
     }
     return { players: playersState };
+  }
+
+  public setPlayerRotation(
+    playerId: string,
+    rotation: { x: number; y: number; z: number; w: number },
+  ) {
+    const body = this.playerBodies.get(playerId);
+
+    if (body) {
+      body.setRotation(rotation, true);
+    }
   }
 
   public step() {
