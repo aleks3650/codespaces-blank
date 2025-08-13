@@ -1,4 +1,6 @@
 import RAPIER from "npm:@dimforge/rapier3d-compat";
+import { PlayerInput } from "./helpers/types.ts";
+import { PlayerController } from "./playerController.ts";
 
 interface MapCollisionData {
   vertices: number[];
@@ -7,10 +9,10 @@ interface MapCollisionData {
 
 export class PhysicsWorld {
   private world: RAPIER.World;
-  private playerBodies: Map<string, RAPIER.RigidBody> = new Map();
+  private playerControllers: Map<string, PlayerController> = new Map();
 
   constructor() {
-    this.world = new RAPIER.World({ x: 0, y: -1, z: 0 });
+    this.world = new RAPIER.World({ x: 0, y: 0, z: 0 }); 
   }
 
   public async initializeMapCollider(path: string) {
@@ -30,52 +32,31 @@ export class PhysicsWorld {
   }
 
   public addPlayer(playerId: string) {
-    const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
-      .setTranslation(1.0, 5.0, 0.0);
-    const body = this.world.createRigidBody(bodyDesc);
-
-    const colliderDesc = RAPIER.ColliderDesc.ball(0.05);
-    this.world.createCollider(colliderDesc, body);
-
-    this.playerBodies.set(playerId, body);
-    console.log(`[Physics] Added player body for ${playerId}`);
+    const initialPos = { x: 1.5, y: 1.5, z: 0.0 };
+    const controller = new PlayerController(this.world, initialPos);
+    this.playerControllers.set(playerId, controller);
   }
 
   public removePlayer(playerId: string) {
-    const body = this.playerBodies.get(playerId);
-    if (body) {
-      this.world.removeCollider(body.collider(0), false);
-      this.world.removeRigidBody(body);
-      this.playerBodies.delete(playerId);
-      console.log(`[Physics] Removed player body for ${playerId}`);
+    this.playerControllers.get(playerId)?.cleanup();
+    this.playerControllers.delete(playerId);
+  }
+  
+  public update(inputs: Map<string, PlayerInput>, deltaTime: number) {
+    for (const [playerId, controller] of this.playerControllers.entries()) {
+      const playerInput = inputs.get(playerId);
+      if (playerInput) {
+        controller.update(playerInput, deltaTime);
+      }
     }
+    this.world.step();
   }
 
   public getState() {
-    const playersState: {
-      [id: string]: { position: RAPIER.Vector; rotation: RAPIER.Quaternion };
-    } = {};
-    for (const [id, body] of this.playerBodies.entries()) {
-      playersState[id] = {
-        position: body.translation(),
-        rotation: body.rotation(),
-      };
+    const playersState: { [id: string]: { position: RAPIER.Vector; rotation: RAPIER.Quaternion } } = {};
+    for (const [id, controller] of this.playerControllers.entries()) {
+      playersState[id] = controller.getState();
     }
     return { players: playersState };
-  }
-
-  public setPlayerRotation(
-    playerId: string,
-    rotation: { x: number; y: number; z: number; w: number },
-  ) {
-    const body = this.playerBodies.get(playerId);
-
-    if (body) {
-      body.setRotation(rotation, true);
-    }
-  }
-
-  public step() {
-    this.world.step();
   }
 }

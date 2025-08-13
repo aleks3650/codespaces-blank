@@ -1,3 +1,4 @@
+import { PlayerInput } from "./helpers/types.ts";
 import { PhysicsWorld } from "./physics.ts";
 
 export class Game {
@@ -19,21 +20,11 @@ export class Game {
     await this.physics.initializeMapCollider("./map_collider.json");
   }
 
-  public update(tick: number) {
-    this.physics.step();
-    const physicsState = this.physics.getState();
-
-    return {
-      players: physicsState.players,
-      tick: tick,
-      time: new Date().toISOString(),
-    };
+  public update(inputs: Map<string, PlayerInput>, deltaTime: number) {
+    this.physics.update(inputs, deltaTime);
   }
 
-  public updatePlayerRotation(
-    id: string,
-    rotation: { x: number; y: number; z: number; w: number },
-  ) {
-    this.physics.setPlayerRotation(id, rotation);
+  public getState() {
+    return this.physics.getState();
   }
 }

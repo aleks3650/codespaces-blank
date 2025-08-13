@@ -8,6 +8,7 @@ import RemotePlayers from "./players/RemotePlayers";
 import { useRef } from "react";
 import * as THREE from "three";
 import { PlayerControls } from "./players/PlayerControls";
+import { Stats } from "@react-three/drei";
 
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
         style={{ height: "100dvh", width: "100dvw", position: "relative" }}
         onClick={(e) => (e.target as HTMLCanvasElement).requestPointerLock()}
       > 
+        <Stats />
         <EnvironmentItem />
         <LocalPlayer ref={playerRef} />
         <RemotePlayers />

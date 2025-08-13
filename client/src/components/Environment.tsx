@@ -1,5 +1,4 @@
 import { EnvironmentMap, Sky } from "@react-three/drei";
-// import Village from "../map/Village";
 import { ColliderVisualizer } from "./ColliderVisualizer";
 import { Mapsko } from "../map/Mapsko";
 

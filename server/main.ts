@@ -1,19 +1,27 @@
 import RAPIER from "npm:@dimforge/rapier3d-compat";
 import { Game } from "./src/game.ts";
-import { MAX_TICKS, TICK_RATE } from "./src/helpers/constants.ts";
+import { TICK_RATE } from "./src/helpers/constants.ts";
 import { io } from "./src/helpers/IO_Server.ts";
+import { PlayerInput } from "./src/helpers/types.ts";
 
 await RAPIER.init();
 
 const game = new Game();
 await game.initialize();
 
-let tick = 0;
+let lastTickTime = Date.now();
+const pendingInputs: Map<string, PlayerInput> = new Map();
 
 function gameLoop() {
-  tick = (tick + 1) % MAX_TICKS;
-  const liveGameState = game.update(tick);
+  const now = Date.now();
+  const deltaTime = (now - lastTickTime) / 1000.0; 
+  lastTickTime = now;
 
+  game.update(pendingInputs, deltaTime);
+  
+  pendingInputs.clear();
+
+  const liveGameState = game.getState();
   io.emit("gameState", liveGameState);
 
   setTimeout(gameLoop, TICK_RATE);
@@ -22,12 +30,12 @@ function gameLoop() {
 io.on("connection", (socket) => {
   console.log(`socket ${socket.id} connected`);
   game.addNewPlayer(socket.id);
-  socket.on(
-    "player-rotation",
-    (rotation: { x: number; y: number; z: number; w: number }) => {
-      game.updatePlayerRotation(socket.id, rotation);
-    },
-  );
+
+  socket.on("player-inputs", (data: PlayerInput) => {
+    data.playerId = socket.id;
+    pendingInputs.set(socket.id, data);
+  });
+
   socket.on("disconnect", (reason) => {
     console.log(`socket ${socket.id} disconnected due to ${reason}`);
     game.removePlayer(socket.id);
