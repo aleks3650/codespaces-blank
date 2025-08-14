@@ -26,7 +26,7 @@ const LocalPlayer = forwardRef<THREE.Group>((_props, ref) => {
 
     return (
         <group ref={ref}>
-            <mesh>
+            <mesh castShadow>
                 <sphereGeometry args={[0.05]} />
                 <meshStandardMaterial color="orange" />
             </mesh>

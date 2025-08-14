@@ -5,27 +5,44 @@ import ConnectionStats from "./components/ConnectionStats";
 import EnvironmentItem from "./components/Environment";
 import LocalPlayer from "./players/LocalPlayer";
 import RemotePlayers from "./players/RemotePlayers";
-import { useRef } from "react";
+import { Suspense, useRef } from "react";
 import * as THREE from "three";
 import { PlayerControls } from "./players/PlayerControls";
 import { Stats } from "@react-three/drei";
-
+import { FadingLoader } from "./components/FadingLoader";
+import { Effects } from "./components/Effects";
 
 function App() {
   useSocketConnect();
-    const playerRef = useRef<THREE.Group>(null!);
+  const playerRef = useRef<THREE.Group>(null!);
+  const environmentRef = useRef<THREE.Group>(null!);
 
   return (
     <>
       <Canvas
+        gl={{
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 0.6,
+          outputColorSpace: THREE.SRGBColorSpace,
+          antialias: false,
+        }}
+        shadows={{ enabled: true, type: THREE.PCFSoftShadowMap }}
         style={{ height: "100dvh", width: "100dvw", position: "relative" }}
         onClick={(e) => (e.target as HTMLCanvasElement).requestPointerLock()}
-      > 
-        <Stats />
-        <EnvironmentItem />
-        <LocalPlayer ref={playerRef} />
-        <RemotePlayers />
-        <PlayerControls playerRef={playerRef} />
+      >
+
+        <Suspense fallback={<FadingLoader />}>
+        
+          <Stats />
+          <EnvironmentItem ref={environmentRef} />
+          <LocalPlayer ref={playerRef} />
+          <RemotePlayers />
+          <PlayerControls
+            playerRef={playerRef}
+            environmentRef={environmentRef}
+          />
+          <Effects />
+        </Suspense>
       </Canvas>
       <ConnectionStats />
     </>
