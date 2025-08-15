@@ -2,30 +2,31 @@ import * as THREE from "npm:three";
 import RAPIER from "npm:@dimforge/rapier3d-compat";
 import { PlayerInput } from "./helpers/types.ts";
 
-
 export class PlayerController {
-  private body: RAPIER  .RigidBody;
+  private body: RAPIER.RigidBody;
   private controller: RAPIER.KinematicCharacterController;
   private world: RAPIER.World;
   private velocity = new THREE.Vector3();
 
-  private readonly moveSpeed = 1;
-  private readonly jumpStrength = 2.75;
-  private readonly gravity = -15.0; 
-
+  private readonly walkSpeed = .5;
+  private readonly sprintSpeed = 1.25; 
+  private readonly jumpStrength = 1.25;
+  private readonly gravity = -10.0; 
+ 
   constructor(world: RAPIER.World, initialPosition: RAPIER.Vector) {
     this.world = world;
-    
+
     const rigidBodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased()
       .setTranslation(initialPosition.x, initialPosition.y, initialPosition.z);
     this.body = world.createRigidBody(rigidBodyDesc);
 
-    const colliderDesc = RAPIER.ColliderDesc.ball(0.05);
+    const colliderDesc = RAPIER.ColliderDesc.capsule(0.15, 0.05);
     world.createCollider(colliderDesc, this.body);
 
     this.controller = world.createCharacterController(0.001);
-    this.controller.enableAutostep(0.5, 0.2, true); 
-    this.controller.enableSnapToGround(0.05);
+    this.controller.enableAutostep(0.5, 0.2, true);
+    // Funkcja snap-to-ground będzie teraz działać znacznie lepiej z płaską podstawą kapsuły
+    this.controller.enableSnapToGround(0.25);
   }
 
   public update(input: PlayerInput, deltaTime: number) {
@@ -46,7 +47,7 @@ export class PlayerController {
     const isOnGround = this.controller.computedGrounded();
     
     if (isOnGround) {
-      this.velocity.y = this.gravity * deltaTime;
+      this.velocity.y = this.gravity * deltaTime; // Lekka grawitacja, by "przykleić" do podłoża
       if (input.inputs.jump) {
         this.velocity.y = this.jumpStrength;
       }
@@ -54,8 +55,13 @@ export class PlayerController {
       this.velocity.y += this.gravity * deltaTime; 
     }
     
-    this.velocity.x = moveDirection.x * this.moveSpeed;
-    this.velocity.z = moveDirection.z * this.moveSpeed;
+    // DODANE: Logika sprintu
+    // Sprawdzamy, czy gracz trzyma klawisz sprintu i na tej podstawie wybieramy prędkość.
+    const currentSpeed = input.inputs.sprint ? this.sprintSpeed : this.walkSpeed;
+
+    // Zastosowanie wybranej prędkości do ruchu
+    this.velocity.x = moveDirection.x * currentSpeed;
+    this.velocity.z = moveDirection.z * currentSpeed;
 
     const movement = this.velocity.clone().multiplyScalar(deltaTime);
     this.controller.computeColliderMovement(this.body.collider(0), movement);

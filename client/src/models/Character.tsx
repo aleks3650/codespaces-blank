@@ -16,7 +16,7 @@ interface GLTFAction extends THREE.AnimationClip {
   name: ActionName
 }
 
-type GLTFResult = GLTF & {
+export type GLTFResult = GLTF & {
   nodes: {
     ['body-mesh']: THREE.SkinnedMesh
     ['head-mesh']: THREE.SkinnedMesh
@@ -29,15 +29,15 @@ type GLTFResult = GLTF & {
 }
 
 // @ts-ignore
-export function Model(props: JSX.IntrinsicElements['group']) {
+export function CharacterModel(props: JSX.IntrinsicElements['group']) {
   const group = React.useRef<THREE.Group>(null)
   const { scene, animations } = useGLTF('/character.glb')
   const clone = React.useMemo(() => SkeletonUtils.clone(scene), [scene])
   const { nodes, materials } = useGraph(clone) as unknown as GLTFResult
   const { actions: _actions } = useAnimations(animations, group)
   return (
-    <group ref={group} {...props} dispose={null}>
-      <group name="character-male-b">
+    <group ref={group} {...props} dispose={null} scale={.1}  >
+      <group name="character-male-b" rotation={[0, Math.PI, 0]}>
         <group name="character-male-b_1">
           <primitive object={nodes.root} />
           <skinnedMesh name="body-mesh" geometry={nodes['body-mesh'].geometry} material={materials.colormap} skeleton={nodes['body-mesh'].skeleton} />

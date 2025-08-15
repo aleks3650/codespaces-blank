@@ -1,12 +1,13 @@
 import { useEffect, useRef } from "react";
 
-type InputAction =
+export type InputAction =
   | "forward"
   | "backward"
   | "left"
   | "right"
   | "jump"
-  | "sprint";
+  | "sprint"  
+  | "cameraFlip";
 
 type InputState = Record<InputAction, boolean>;
 
@@ -17,7 +18,8 @@ type KeyCode =
   | "KeyD"
   | "Space"
   | "ShiftLeft"
-  | "ShiftRight";
+  | "ShiftRight"
+  | "KeyC";
 
 const keyActionMap = {
   KeyW: "forward",
@@ -27,6 +29,7 @@ const keyActionMap = {
   Space: "jump",
   ShiftLeft: "sprint",
   ShiftRight: "sprint",
+  KeyC: "cameraFlip",
 } as const satisfies Record<KeyCode, InputAction>;
 
 export const useInputControls = () => {
@@ -37,6 +40,7 @@ export const useInputControls = () => {
     right: false,
     jump: false,
     sprint: false,
+    cameraFlip: false,
   });
 
   useEffect(() => {

@@ -1,3 +1,5 @@
+// src/App.tsx
+
 import "./App.css";
 import { useSocketConnect } from "./hooks/useSocket";
 import { Canvas } from "@react-three/fiber";
@@ -11,6 +13,7 @@ import { PlayerControls } from "./players/PlayerControls";
 import { Stats } from "@react-three/drei";
 import { FadingLoader } from "./components/FadingLoader";
 import { Effects } from "./components/Effects";
+import { InputControlsProvider } from "./context/InputContext"; // <-- IMPORTUJEMY
 
 function App() {
   useSocketConnect();
@@ -30,18 +33,19 @@ function App() {
         style={{ height: "100dvh", width: "100dvw", position: "relative" }}
         onClick={(e) => (e.target as HTMLCanvasElement).requestPointerLock()}
       >
-
         <Suspense fallback={<FadingLoader />}>
-        
-          <Stats />
-          <EnvironmentItem ref={environmentRef} />
-          <LocalPlayer ref={playerRef} />
-          <RemotePlayers />
-          <PlayerControls
-            playerRef={playerRef}
-            environmentRef={environmentRef}
-          />
-          <Effects />
+          {/* Obejmujemy wszystko, co potrzebuje dostępu do inputu, naszym Providerem */}
+          <InputControlsProvider>
+            <Stats />
+            <EnvironmentItem ref={environmentRef} />
+            <LocalPlayer ref={playerRef} />
+            <RemotePlayers />
+            <PlayerControls
+              playerRef={playerRef}
+              environmentRef={environmentRef}
+            />
+            <Effects />
+          </InputControlsProvider>
         </Suspense>
       </Canvas>
       <ConnectionStats />
