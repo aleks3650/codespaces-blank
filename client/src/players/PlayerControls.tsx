@@ -1,9 +1,11 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { PointerLockControls } from '@react-three/drei';
 import * as THREE from 'three';
-import React, { useMemo, useRef } from 'react';
+import { useMemo, useRef } from 'react';
 import { socket } from '../socket/socket';
-import { useInputContext } from '../context/InputContext'; 
+import { useInputContext } from '../context/InputContext';
+import { useRefStore } from '../state/Store';
+
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 const newPlayerRotation = new THREE.Quaternion();
 
@@ -12,18 +14,20 @@ const idealCameraPosition = new THREE.Vector3();
 const finalCameraPosition = new THREE.Vector3();
 const rayFromPlayer = new THREE.Vector3();
 
-export const PlayerControls = ({ environmentRef, playerRef }: {
-    environmentRef: React.RefObject<THREE.Group>;
-    playerRef: React.RefObject<THREE.Group>;
-}) => {
+export const PlayerControls = () => {
     const { camera } = useThree();
     const sendTimer = useRef(0);
     const raycaster = useMemo(() => new THREE.Raycaster(), []);
     
     const inputRef = useInputContext();
+    
+    const playerRef = useRefStore((state) => state.playerRef);
+    const environmentRef = useRefStore((state) => state.environmentRef);
 
     useFrame((_state, delta) => {
-        if (!playerRef.current || !environmentRef.current || !inputRef.current) return;
+        if (!playerRef?.current || !environmentRef?.current || !inputRef.current) {
+            return;
+        }
 
         euler.setFromQuaternion(camera.quaternion);
         euler.x = 0;

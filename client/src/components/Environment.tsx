@@ -1,13 +1,8 @@
 import { Environment, Sky } from "@react-three/drei";
 // import { ColliderVisualizer } from "./ColliderVisualizer";
 import { Mapsko } from "../models/Map";
-import * as THREE from "three";
 
-type EnvironmentProps = {
-  ref: React.ForwardedRef<THREE.Group>;
-};
-
-const EnvironmentItem = ({ ref }: EnvironmentProps) => {
+const EnvironmentItem = () => {
   return (
     <>
       <group rotation={[Math.PI, 0, 0]}>
@@ -36,7 +31,7 @@ const EnvironmentItem = ({ ref }: EnvironmentProps) => {
         shadow-bias={-0.001}
         shadow-normalBias={0.05}
       />
-      <Mapsko ref={ref} />
+      <Mapsko />
       {/* <ColliderVisualizer /> */}
     </>
   );

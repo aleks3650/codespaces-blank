@@ -6,7 +6,8 @@ Command: npx gltfjsx@6.5.3 public/mapsko.glb -t
 import * as THREE from 'three'
 import { useGLTF } from '@react-three/drei'
 import type { GLTF } from 'three-stdlib'
-import React, { useLayoutEffect } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useRefStore } from '../state/Store'
 
 type GLTFResult = GLTF & {
   nodes: {
@@ -60,9 +61,19 @@ type GLTFResult = GLTF & {
   //animations: GLTFAction[]
 }
 
-// @ts-ignore
-export const Mapsko = React.forwardRef<THREE.Group, JSX.IntrinsicElements['group']>((props, ref) => {
-  const { scene, nodes: _nodes, materials: _materials } = useGLTF('/mapsko.glb') as unknown as GLTFResult
+export const Mapsko = () => {
+  const { scene } = useGLTF('/mapsko.glb') as unknown as GLTFResult
+
+  const environmentRef = useRef<THREE.Group>(null!);
+
+  const setEnvironmentRef = useRefStore((state) => state.setEnvironmentRef);
+
+  useEffect(() => {
+    setEnvironmentRef(environmentRef);
+    
+    return () => setEnvironmentRef(null!);
+  }, [setEnvironmentRef]);
+
 
   useLayoutEffect(() => {
     scene.traverse((child) => {
@@ -73,9 +84,8 @@ export const Mapsko = React.forwardRef<THREE.Group, JSX.IntrinsicElements['group
     });
   }, [scene]);
 
-
-  return <primitive object={scene} {...props} ref={ref} />
-})
+  return <primitive object={scene} ref={environmentRef} />
+}
 
 useGLTF.preload('/mapsko.glb')
 

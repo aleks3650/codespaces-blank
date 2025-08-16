@@ -75,7 +75,6 @@ button:focus-visible {
 
 .canvas {
   pointer-events: none; 
-  position: absolute;
   top: 0;
   left: 0;
   width: 100%;
@@ -89,9 +88,10 @@ button:focus-visible {
 }
 
 .view2 {
-  position: absolute;
+  position: fixed;
   top: 2em;
   left: 2em;
   width: 125px;
   height: 125px;
+  z-index: 100;
 }

@@ -1,26 +1,43 @@
-import { OrbitControls, PerspectiveCamera } from "@react-three/drei";
+import { Environment, PerspectiveCamera } from "@react-three/drei";
+import { useFrame, useThree } from "@react-three/fiber";
+import { useRef } from "react";
 import * as THREE from "three";
+import { useRefStore } from "../state/Store";
 
-type Props = {
-  playerRef: React.RefObject<THREE.Group>;
-  environmentRef: React.RefObject<THREE.Group>;
-};
+export default function MiniMap() {
+  const { playerRef, environmentRef } = useRefStore();
+  const camRef = useRef<THREE.PerspectiveCamera>(null!);
+  const markerRef = useRef<THREE.Mesh>(null!);
+  const gl = useThree((state) => state.gl);
 
-export default function MiniMap({ playerRef, environmentRef }: Props) {
-  console.log("Player", playerRef.current,"Environment", environmentRef.current);
-
+  useFrame(() => {
+    gl.clearDepth();
+    if (camRef.current && playerRef?.current) {
+      const pos = playerRef.current.position;
+      camRef.current.position.set(pos.x, 7.5, pos.z);
+      camRef.current.lookAt(pos.x, 0, pos.z);
+    }
+    if (markerRef.current && playerRef?.current) {
+      markerRef.current.position.copy(playerRef.current.position);
+    }
+  }, 1);
+  if (!playerRef?.current || !environmentRef?.current) {
+    return null;
+  }
 
   return (
     <>
-    <color attach="background" args={['#222']} />
-    <ambientLight intensity={0.8} />
-    <directionalLight position={[3, 3, 5]} intensity={1} castShadow />
-    <PerspectiveCamera makeDefault position={[3, 2, 4]} fov={50} />
-    <OrbitControls makeDefault enablePan={false} />
-    <mesh castShadow>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color="orange" />
-    </mesh>
+      <ambientLight intensity={1} />
+      <Environment preset="sunset" />
+      <PerspectiveCamera ref={camRef} makeDefault fov={50} />
+
+      <primitive object={environmentRef.current} />
+      <primitive object={playerRef.current} />
+
+      <mesh ref={markerRef} renderOrder={999}>
+        <coneGeometry args={[0.3, 0.8]} />
+        <meshBasicMaterial color="red" depthTest={false} />
+      </mesh>
     </>
   );
 }

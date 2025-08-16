@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import React, { forwardRef, useMemo, useRef, useEffect } from 'react';
+import { useMemo, useRef, useEffect } from 'react';
 import { useFrame, useGraph } from '@react-three/fiber';
 import { useGLTF, useAnimations } from '@react-three/drei';
 import { SkeletonUtils } from 'three-stdlib';
 
-import { useSocketStore } from '../state/Store';
+import { useRefStore, useSocketStore } from '../state/Store'; 
 import { socket } from '../socket/socket';
 import { CharacterModel } from '../models/Character';
 import type { GLTFResult } from '../models/Character';
@@ -17,16 +17,25 @@ type PlayerAction = 'idle' | 'walk' | 'sprint';
 
 const PLAYER_HEIGHT_OFFSET = -0.2;
 
-const LocalPlayer = forwardRef<THREE.Group>((_props, ref) => {
+const LocalPlayer = () => {
   const localPlayerState = useSocketStore((state) => state.players[socket.id!]);
   const inputRef = useInputContext();
+
+  const playerRef = useRef<THREE.Group>(null!);
+
+  const setPlayerRef = useRefStore((state) => state.setPlayerRef);
+
+  useEffect(() => {
+    setPlayerRef(playerRef);
+    return () => setPlayerRef(null!);
+  }, [setPlayerRef]);
 
   const { scene, animations } = useGLTF('/character.glb') as unknown as GLTFResult;
   const clone = useMemo(() => SkeletonUtils.clone(scene), [scene]);
   const { nodes, materials } = useGraph(clone) as unknown as GLTFResult;
 
   const currentAction = useRef<PlayerAction>('idle');
-  const { actions } = useAnimations(animations, ref as React.RefObject<THREE.Group>);
+  const { actions } = useAnimations(animations, playerRef);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -45,7 +54,7 @@ const LocalPlayer = forwardRef<THREE.Group>((_props, ref) => {
   }, [actions]); 
 
   useFrame(() => {
-    if (!localPlayerState || !ref || !('current' in ref) || !ref.current || !inputRef.current) return;
+    if (!localPlayerState || !playerRef.current || !inputRef.current) return;
 
     const { forward, backward, left, right, sprint } = inputRef.current;
     let newAction: PlayerAction = 'idle';
@@ -66,7 +75,7 @@ const LocalPlayer = forwardRef<THREE.Group>((_props, ref) => {
       localPlayerState.position.y,
       localPlayerState.position.z,
     );
-    ref.current.position.lerp(targetPosition, LERP_FACTOR);
+    playerRef.current.position.lerp(targetPosition, LERP_FACTOR);
   });
 
   useGLTF.preload('/character.glb');
@@ -74,12 +83,12 @@ const LocalPlayer = forwardRef<THREE.Group>((_props, ref) => {
   if (!localPlayerState) return null;
 
   return (
-    <group ref={ref}>
+    <group ref={playerRef}>
       <group position-y={PLAYER_HEIGHT_OFFSET}> 
         <CharacterModel nodes={nodes} materials={materials} />
       </group>
     </group>
   );
-});
+};
 
 export default LocalPlayer;

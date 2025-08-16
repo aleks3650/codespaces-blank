@@ -4,22 +4,15 @@ import { InputControlsProvider } from "../context/InputContext";
 import LocalPlayer from "../players/LocalPlayer";
 import { PlayerControls } from "../players/PlayerControls";
 import RemotePlayers from "../players/RemotePlayers";
-import * as THREE from "three";
 
-const Game = ({ environmentRef, playerRef }: {
-    environmentRef: React.RefObject<THREE.Group>;
-    playerRef: React.RefObject<THREE.Group>;
-}) => {
+const Game = () => {
 
     return (
         <InputControlsProvider>
-            <EnvironmentItem ref={environmentRef} />
-            <LocalPlayer ref={playerRef} />
+            <EnvironmentItem />
+            <LocalPlayer />
             <RemotePlayers />
-            <PlayerControls
-                playerRef={playerRef}
-                environmentRef={environmentRef}
-            />
+            <PlayerControls />
             <Effects />
         </InputControlsProvider>
     );
