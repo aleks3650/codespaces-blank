@@ -1,8 +1,6 @@
-import { useSocketStore } from "../state/Store";
 import { socket } from "../socket/socket";
 
 const ConnectionStats = () => {
-    const { tick } = useSocketStore();
     const isConnected = socket.connected;
     const socketId = socket.id;
     return (
@@ -26,7 +24,6 @@ const ConnectionStats = () => {
         >
             {isConnected && <h1 style={{ fontSize: "14px" }}>ID: {socketId}
             </h1>}
-            {tick && <h2 style={{ fontSize: "10px" }}>Tick: {tick}</h2>}
         </div>
     );
 };

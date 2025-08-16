@@ -8,7 +8,7 @@ await RAPIER.init();
 
 const game = new Game();
 await game.initialize();
-
+ 
 let lastTickTime = Date.now();
 const pendingInputs: Map<string, PlayerInput> = new Map();
 

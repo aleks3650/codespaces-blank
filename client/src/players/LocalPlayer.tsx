@@ -1,5 +1,3 @@
-// src/players/LocalPlayer.tsx
-
 import * as THREE from 'three';
 import React, { forwardRef, useMemo, useRef, useEffect } from 'react';
 import { useFrame, useGraph } from '@react-three/fiber';
@@ -17,9 +15,6 @@ const LERP_FACTOR = 0.2;
 
 type PlayerAction = 'idle' | 'walk' | 'sprint';
 
-// ===== ROZWIĄZANIE PROBLEMU 1: Wysokość postaci =====
-// Ta stała MUSI być równa połowie wysokości kapsuły zdefiniowanej w PlayerController.ts na serwerze.
-// `RAPIER.ColliderDesc.capsule(0.15, 0.05)` -> halfHeight = 0.15
 const PLAYER_HEIGHT_OFFSET = -0.2;
 
 const LocalPlayer = forwardRef<THREE.Group>((_props, ref) => {
@@ -33,12 +28,9 @@ const LocalPlayer = forwardRef<THREE.Group>((_props, ref) => {
   const currentAction = useRef<PlayerAction>('idle');
   const { actions } = useAnimations(animations, ref as React.RefObject<THREE.Group>);
 
-  // ===== ROZWIĄZANIE PROBLEMU 2: Zatrzymane animacje =====
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        // Gdy wracamy do karty, zresetuj i odtwórz bieżącą animację,
-        // aby upewnić się, że nie utknęła.
         const action = actions[currentAction.current];
         if (action) {
           action.reset().fadeIn(0.2).play();
@@ -50,12 +42,11 @@ const LocalPlayer = forwardRef<THREE.Group>((_props, ref) => {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [actions]); // Zależność od `actions`, aby mieć pewność, że są załadowane.
+  }, [actions]); 
 
   useFrame(() => {
     if (!localPlayerState || !ref || !('current' in ref) || !ref.current || !inputRef.current) return;
 
-    // --- Logika animacji (bez zmian) ---
     const { forward, backward, left, right, sprint } = inputRef.current;
     let newAction: PlayerAction = 'idle';
     if (forward || backward || left || right) {
@@ -70,7 +61,6 @@ const LocalPlayer = forwardRef<THREE.Group>((_props, ref) => {
       currentAction.current = newAction;
     }
 
-    // --- Interpolacja pozycji (bez zmian) ---
     targetPosition.set(
       localPlayerState.position.x,
       localPlayerState.position.y,
@@ -84,8 +74,6 @@ const LocalPlayer = forwardRef<THREE.Group>((_props, ref) => {
   if (!localPlayerState) return null;
 
   return (
-    // Zmieniamy strukturę: zewnętrzna grupa `ref` jest pozycjonowana przez serwer,
-    // a wewnętrzna grupa kompensuje wysokość.
     <group ref={ref}>
       <group position-y={PLAYER_HEIGHT_OFFSET}> 
         <CharacterModel nodes={nodes} materials={materials} />

@@ -8,25 +8,18 @@ export interface PlayerState {
 
 export interface GameStateFromServer {
     players: { [id: string]: PlayerState };
-    tick: number;
-    time: string;
 }
 
 interface SocketStore {
     players: { [id: string]: PlayerState };
-    tick: number;
-    time: string;
+
     setGameState: (newState: GameStateFromServer) => void;
 }
 
 export const useSocketStore = create<SocketStore>((set) => ({
     players: {},
-    tick: 0,
-    time: "",
-    
+
     setGameState: (newState) => set({
-        players: newState.players,
-        tick: newState.tick,
-        time: newState.time,
+        players: newState.players
     }),
 }));

@@ -20,20 +20,17 @@ export const PlayerControls = ({ environmentRef, playerRef }: {
     const sendTimer = useRef(0);
     const raycaster = useMemo(() => new THREE.Raycaster(), []);
     
-    // Pobieramy ten sam, współdzielony ref z kontekstu.
     const inputRef = useInputContext();
 
     useFrame((_state, delta) => {
         if (!playerRef.current || !environmentRef.current || !inputRef.current) return;
 
-        // Obrót gracza na podstawie kamery
         euler.setFromQuaternion(camera.quaternion);
         euler.x = 0;
         euler.z = 0;
         newPlayerRotation.setFromEuler(euler);
         playerRef.current.quaternion.copy(newPlayerRotation);
         
-        // Logika kolizji kamery
         const playerPosition = playerRef.current.position;
         const rotatedOffset = cameraOffset.clone().applyQuaternion(camera.quaternion);
         idealCameraPosition.copy(playerPosition).add(rotatedOffset);
@@ -53,14 +50,13 @@ export const PlayerControls = ({ environmentRef, playerRef }: {
         }
         camera.position.lerp(finalCameraPosition, 20 * delta);
 
-        // Wysyłanie danych na serwer
         sendTimer.current += delta;
         if (sendTimer.current >= 1 / 60) {
             sendTimer.current = 0;
             const q = playerRef.current.quaternion;
             socket.emit("player-inputs", {
                 rotation: [q.x, q.y, q.z, q.w],
-                inputs: { ...inputRef.current }, // Wysyłamy dane z refa
+                inputs: { ...inputRef.current },
             });
         }
     });

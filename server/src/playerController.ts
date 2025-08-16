@@ -25,7 +25,6 @@ export class PlayerController {
 
     this.controller = world.createCharacterController(0.001);
     this.controller.enableAutostep(0.5, 0.2, true);
-    // Funkcja snap-to-ground będzie teraz działać znacznie lepiej z płaską podstawą kapsuły
     this.controller.enableSnapToGround(0.25);
   }
 
@@ -47,19 +46,16 @@ export class PlayerController {
     const isOnGround = this.controller.computedGrounded();
     
     if (isOnGround) {
-      this.velocity.y = this.gravity * deltaTime; // Lekka grawitacja, by "przykleić" do podłoża
+      this.velocity.y = this.gravity * deltaTime; 
       if (input.inputs.jump) {
         this.velocity.y = this.jumpStrength;
       }
     } else {
       this.velocity.y += this.gravity * deltaTime; 
     }
-    
-    // DODANE: Logika sprintu
-    // Sprawdzamy, czy gracz trzyma klawisz sprintu i na tej podstawie wybieramy prędkość.
+
     const currentSpeed = input.inputs.sprint ? this.sprintSpeed : this.walkSpeed;
 
-    // Zastosowanie wybranej prędkości do ruchu
     this.velocity.x = moveDirection.x * currentSpeed;
     this.velocity.z = moveDirection.z * currentSpeed;
 

@@ -5,12 +5,9 @@ import type { InputAction } from "../hooks/useInputControls";
 
 type InputState = Record<InputAction, boolean>;
 
-// Tworzymy kontekst z wartością domyślną null
 const InputContext = createContext<React.RefObject<InputState> | null>(null);
 
-// Komponent Provider, który będzie zarządzał stanem inputu
 export const InputControlsProvider = ({ children }: { children: React.ReactNode }) => {
-  // Wywołujemy Twój hook w jednym, centralnym miejscu
   const inputRef = useOriginalInputControls();
   
   return (
@@ -20,7 +17,6 @@ export const InputControlsProvider = ({ children }: { children: React.ReactNode 
   );
 };
 
-// Własny hook do wygodnego konsumowania kontekstu
 export const useInputContext = () => {
   const context = useContext(InputContext);
   if (!context) {
