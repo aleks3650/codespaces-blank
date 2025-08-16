@@ -4,6 +4,7 @@ import { InputControlsProvider } from "../context/InputContext";
 import LocalPlayer from "../players/LocalPlayer";
 import { PlayerControls } from "../players/PlayerControls";
 import RemotePlayers from "../players/RemotePlayers";
+import { EffectsManager } from "../components/effects/EffectsManager";
 
 const Game = () => {
 
@@ -14,6 +15,7 @@ const Game = () => {
             <RemotePlayers />
             <PlayerControls />
             <Effects />
+            <EffectsManager />
         </InputControlsProvider>
     );
 };

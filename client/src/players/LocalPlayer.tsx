@@ -4,7 +4,7 @@ import { useFrame, useGraph } from '@react-three/fiber';
 import { useGLTF, useAnimations } from '@react-three/drei';
 import { SkeletonUtils } from 'three-stdlib';
 
-import { useRefStore, useSocketStore } from '../state/Store'; 
+import { useCharacterActionStore, useRefStore, useSocketStore } from '../state/Store';
 import { socket } from '../socket/socket';
 import { CharacterModel } from '../models/Character';
 import type { GLTFResult } from '../models/Character';
@@ -35,23 +35,37 @@ const LocalPlayer = () => {
   const { nodes, materials } = useGraph(clone) as unknown as GLTFResult;
 
   const currentAction = useRef<PlayerAction>('idle');
-  const { actions } = useAnimations(animations, playerRef);
+  const { actions, mixer } = useAnimations(animations, playerRef);
+
+  const lastActionTimestamp = useCharacterActionStore((state) => state.lastActionTimestamp);
+
 
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        const action = actions[currentAction.current];
-        if (action) {
-          action.reset().fadeIn(0.2).play();
-        }
-      }
-    };
+    if (!lastActionTimestamp) return;
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    const action = actions['interact-right'];
+    if (!action) return;
+
+    action.reset();
+    action.setLoop(THREE.LoopOnce, 1);
+    action.clampWhenFinished = true;
+
+    const currentMovementAction = actions[currentAction.current];
+    if (currentMovementAction) {
+      currentMovementAction.fadeOut(0.2);
+    }
+    action.fadeIn(0.1).play();
+
+    const onFinished = () => {
+      action.fadeOut(0.2);
+      const nextMovementAction = actions[currentAction.current];
+      if (nextMovementAction) {
+        nextMovementAction.reset().fadeIn(0.2).play();
+      }
+      mixer.removeEventListener('finished', onFinished);
     };
-  }, [actions]); 
+    mixer.addEventListener('finished', onFinished);
+  }, [lastActionTimestamp, actions, mixer]);
 
   useFrame(() => {
     if (!localPlayerState || !playerRef.current || !inputRef.current) return;
@@ -84,7 +98,7 @@ const LocalPlayer = () => {
 
   return (
     <group ref={playerRef}>
-      <group position-y={PLAYER_HEIGHT_OFFSET}> 
+      <group position-y={PLAYER_HEIGHT_OFFSET}>
         <CharacterModel nodes={nodes} materials={materials} />
       </group>
     </group>

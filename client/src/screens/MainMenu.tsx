@@ -1,6 +1,6 @@
 import { useState } from "react";
 import App from "../App";
-import "../App.css";
+import "../index.css";
 
 const MainMenu = () => {
     const [gameOn, setGameOn] = useState(false);

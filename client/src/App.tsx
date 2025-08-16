@@ -6,6 +6,8 @@ import { gl } from "./constants/constants";
 import Game from "./screens/Game";
 import MiniMap from "./screens/MiniMap";
 import { useSocketConnect } from "./hooks/useSocket";
+import { Crosshair } from "./components/UI/Crosshair";
+import { HUD } from "./components/UI/HUD";
 
 export default function App() {
   useSocketConnect();
@@ -27,6 +29,8 @@ export default function App() {
       >
         <View.Port />
       </Canvas>
+      <Crosshair />
+      <HUD />
       <ConnectionStats />
       <Stats />
     </div>

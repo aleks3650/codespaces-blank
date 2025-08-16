@@ -1,16 +1,20 @@
 import { create } from "zustand";
-import type { Vector, Quaternion } from "@dimforge/rapier3d-compat";
 import * as THREE from 'three'
 import type { RefObject } from "react";
 
 export interface PlayerState {
-    position: Vector;
-    rotation: Quaternion;
+  position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number; w: number };
+  animationState: AnimationState; 
+  health?: number; 
+  mana?: number;
 }
 
 export interface GameStateFromServer {
     players: { [id: string]: PlayerState };
 }
+
+export type AnimationState = 'idle' | 'walk' | 'sprint';
 
 interface SocketStore {
     players: { [id: string]: PlayerState };
@@ -39,4 +43,40 @@ export const useRefStore = create<RefStore>((set) => ({
   
   setPlayerRef: (ref) => set({ playerRef: ref }),
   setEnvironmentRef: (ref) => set({ environmentRef: ref }),
+}));
+
+interface ActionState {
+  lastActionTimestamp: number | null;
+}
+
+interface ActionMethods {
+  triggerCast: () => void;
+}
+
+export const useCharacterActionStore = create<ActionState & ActionMethods>((set) => ({
+  lastActionTimestamp: null,
+  triggerCast: () => set({ lastActionTimestamp: Date.now() }), 
+}))
+
+interface Effect {
+  id: string;
+  position: THREE.Vector3;
+}
+
+interface EffectState {
+  effects: Effect[];
+  addEffect: (position: { x: number; y: number; z: number }) => void;
+  removeEffect: (id: string) => void;
+}
+
+export const useEffectStore = create<EffectState>((set) => ({
+  effects: [],
+  addEffect: (position) => {
+    const id = THREE.MathUtils.generateUUID();
+    const newEffect = { id, position: new THREE.Vector3(position.x, position.y, position.z) };
+    set((state) => ({ effects: [...state.effects, newEffect] }));
+  },
+  removeEffect: (id) => {
+    set((state) => ({ effects: state.effects.filter((effect) => effect.id !== id) }));
+  },
 }));

@@ -1,5 +1,5 @@
 import RAPIER from "npm:@dimforge/rapier3d-compat";
-import { PlayerInput } from "./helpers/types.ts";
+import { PlayerInput, RaycastHitResult } from "./helpers/types.ts";
 import { PlayerController } from "./playerController.ts";
 
 interface MapCollisionData {
@@ -12,7 +12,7 @@ export class PhysicsWorld {
   private playerControllers: Map<string, PlayerController> = new Map();
 
   constructor() {
-    this.world = new RAPIER.World({ x: 0, y: 0, z: 0 }); 
+    this.world = new RAPIER.World({ x: 0, y: 0, z: 0 });
   }
 
   public async initializeMapCollider(path: string) {
@@ -37,11 +37,56 @@ export class PhysicsWorld {
     this.playerControllers.set(playerId, controller);
   }
 
+public castRayForSpell(casterId: string, direction: number[]): RaycastHitResult {
+    const casterController = this.playerControllers.get(casterId);
+    if (!casterController) return { type: "miss" };
+
+    const origin = casterController.getState().position;
+    const rayOrigin = new RAPIER.Vector3(origin.x, origin.y + 0.3, origin.z);
+    const rayDirection = new RAPIER.Vector3(direction[0], direction[1], direction[2]);
+
+    const ray = new RAPIER.Ray(rayOrigin, rayDirection);
+    const maxDistance = 100.0;
+    const solid = true;
+    
+    const casterCollider = casterController.getBody().collider(0);
+    const filterPredicate = (collider: RAPIER.Collider) => {
+      return collider.handle !== casterCollider.handle;
+    };
+
+    const hit = this.world.castRay(
+        ray,
+        maxDistance,
+        solid,
+        undefined,      
+        undefined,        
+        undefined,        
+        undefined,        
+        filterPredicate  
+    );
+
+    if (!hit) {
+      return { type: "miss" };
+    }
+
+    const hitPoint = ray.pointAt(hit.timeOfImpact);
+    const hitCollider = hit.collider;
+
+    for (const [playerId, controller] of this.playerControllers.entries()) {
+      if (controller.getBody().collider(0).handle === hitCollider.handle) {
+        return { type: "player", playerId, point: hitPoint };
+      }
+    }
+
+    return { type: "world", point: hitPoint };
+  }
+
+
   public removePlayer(playerId: string) {
     this.playerControllers.get(playerId)?.cleanup();
     this.playerControllers.delete(playerId);
   }
-  
+
   public update(inputs: Map<string, PlayerInput>, deltaTime: number) {
     for (const [playerId, controller] of this.playerControllers.entries()) {
       const playerInput = inputs.get(playerId);

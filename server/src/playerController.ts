@@ -28,6 +28,10 @@ export class PlayerController {
     this.controller.enableSnapToGround(0.25);
   }
 
+    public getBody(): RAPIER.RigidBody {
+    return this.body;
+  }
+
   public update(input: PlayerInput, deltaTime: number) {
     const [x, y, z, w] = input.rotation;
     this.body.setRotation({ x, y, z, w }, true);

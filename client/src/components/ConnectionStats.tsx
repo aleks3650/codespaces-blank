@@ -3,6 +3,7 @@ import { socket } from "../socket/socket";
 const ConnectionStats = () => {
     const isConnected = socket.connected;
     const socketId = socket.id;
+
     return (
         <div
             style={{
