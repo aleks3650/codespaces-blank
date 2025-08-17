@@ -15,6 +15,9 @@ export function useSocketConnect() {
     }
 
     const onGameState = (data: GameStateFromServer) => {
+      if (data.players[socket.id!]?.status === 'dead') {
+        console.log("Received game state for dead player:", data.players[socket.id!]);
+      }
       setGameState(data);
     };
 

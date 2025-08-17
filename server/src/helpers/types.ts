@@ -13,13 +13,17 @@ export interface PlayerInput {
   };
 }
 
-export type PlayerClass = "Mage" | "Warrior"; 
+export type PlayerClass = "Mage" | "Warrior";
 
 export interface PlayerState {
   id: string;
   class: PlayerClass;
   health: number;
   mana: number;
+  spellCooldowns: Map<string, number>;
+  status: "alive" | "dead";
+  respawnAt: number | null;
+  activeStatusEffects: ActiveStatusEffect[];
 }
 
 export interface CastSpellPayload {
@@ -28,7 +32,7 @@ export interface CastSpellPayload {
 }
 
 export interface PlayerAction {
-  actionType: "castSpell"; 
+  actionType: "castSpell";
   payload: CastSpellPayload;
 }
 
@@ -36,3 +40,19 @@ export type RaycastHitResult =
   | { type: "player"; playerId: string; point: RAPIER.Vector }
   | { type: "world"; point: RAPIER.Vector }
   | { type: "miss" };
+
+export interface LivePlayerState {
+  position: RAPIER.Vector;
+  rotation: RAPIER.Quaternion;
+  health: number;
+  mana: number;
+  class: PlayerClass;
+  status: "alive" | "dead";
+  respawnAt: number | null;
+}
+
+export interface ActiveStatusEffect {
+  effectId: string; 
+  expiresAt: number; 
+  casterId: string; 
+}

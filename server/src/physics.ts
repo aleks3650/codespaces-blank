@@ -37,7 +37,15 @@ export class PhysicsWorld {
     this.playerControllers.set(playerId, controller);
   }
 
-public castRayForSpell(casterId: string, direction: number[]): RaycastHitResult {
+  public teleportPlayer(playerId: string, position: { x: number; y: number; z: number }) {
+    const controller = this.playerControllers.get(playerId);
+    if (controller) {
+      controller.teleport(position);
+    }
+  }
+
+
+  public castRayForSpell(casterId: string, direction: number[], maxDistance: number): RaycastHitResult {
     const casterController = this.playerControllers.get(casterId);
     if (!casterController) return { type: "miss" };
 
@@ -46,23 +54,22 @@ public castRayForSpell(casterId: string, direction: number[]): RaycastHitResult 
     const rayDirection = new RAPIER.Vector3(direction[0], direction[1], direction[2]);
 
     const ray = new RAPIER.Ray(rayOrigin, rayDirection);
-    const maxDistance = 100.0;
     const solid = true;
-    
+
     const casterCollider = casterController.getBody().collider(0);
     const filterPredicate = (collider: RAPIER.Collider) => {
       return collider.handle !== casterCollider.handle;
     };
 
     const hit = this.world.castRay(
-        ray,
-        maxDistance,
-        solid,
-        undefined,      
-        undefined,        
-        undefined,        
-        undefined,        
-        filterPredicate  
+      ray,
+      maxDistance,
+      solid,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      filterPredicate
     );
 
     if (!hit) {

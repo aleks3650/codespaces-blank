@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { socket } from '../socket/socket';
 import { useInputContext } from '../context/InputContext';
-import { useCharacterActionStore, useRefStore } from '../state/Store';
+import { useCharacterActionStore, useRefStore, useSocketStore } from '../state/Store';
 
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 const newPlayerRotation = new THREE.Quaternion();
@@ -20,7 +20,7 @@ export const PlayerControls = () => {
     const { camera } = useThree();
     const sendTimer = useRef(0);
     const raycaster = useMemo(() => new THREE.Raycaster(), []);
-    
+
     const [isLocked, setIsLocked] = useState(false);
 
     const inputRef = useInputContext();
@@ -32,7 +32,11 @@ export const PlayerControls = () => {
 
     useEffect(() => {
         const handleMouseDown = (event: MouseEvent) => {
-            if (!isLocked || event.button !== 0) return;
+            const localPlayerStatus = useSocketStore.getState().players[socket.id!]?.status;
+            
+            if (!isLocked || event.button !== 0 || localPlayerStatus === 'dead') {
+                return;
+            }
 
             raycaster.setFromCamera(screenCenter, camera);
             const sceneObjects = environmentRef?.current?.children ?? [];
@@ -43,14 +47,14 @@ export const PlayerControls = () => {
             if (intersects.length > 0) {
                 targetPoint = intersects[0].point;
             } else {
-                targetPoint = raycaster.ray.at(10, targetPoint); 
+                targetPoint = raycaster.ray.at(10, targetPoint);
             }
 
             if (!playerRef?.current) return;
 
             const spellOrigin = new THREE.Vector3();
             playerRef.current.getWorldPosition(spellOrigin);
-            spellOrigin.y += 0.3; 
+            spellOrigin.y += 0.3;
 
             const correctedDirection = targetPoint.sub(spellOrigin).normalize();
 
@@ -66,11 +70,12 @@ export const PlayerControls = () => {
 
         document.addEventListener('mousedown', handleMouseDown);
         return () => document.removeEventListener('mousedown', handleMouseDown);
-    }, [camera, playerRef, environmentRef, triggerCast, isLocked]); 
+    }, [camera, playerRef, environmentRef, triggerCast, isLocked]);
 
 
     useFrame((_state, delta) => {
-        if (!playerRef?.current || !environmentRef?.current || !inputRef.current) {
+        const localPlayerStatus = useSocketStore.getState().players[socket.id!]?.status;
+        if (!playerRef?.current || !environmentRef?.current || !inputRef.current || localPlayerStatus === 'dead') {
             return;
         }
 
@@ -111,7 +116,7 @@ export const PlayerControls = () => {
     });
 
     return (
-        <PointerLockControls 
+        <PointerLockControls
             onLock={() => setIsLocked(true)}
             onUnlock={() => setIsLocked(false)}
         />

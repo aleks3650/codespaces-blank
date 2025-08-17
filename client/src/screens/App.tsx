@@ -8,9 +8,13 @@ import MiniMap from "./MiniMap";
 import { useSocketConnect } from "../hooks/useSocket";
 import { Crosshair } from "../components/UI/Crosshair";
 import { HUD } from "../components/UI/HUD";
+import { useSocketStore } from "../state/Store";
+import { socket } from "../socket/socket";
+import { DeathScreen } from "../components/UI/DeathScreen";
 
 export default function App() {
   useSocketConnect();
+  const localPlayer = useSocketStore((state) => state.players[socket.id!]);
 
   return (
     <div className="container">
@@ -29,8 +33,14 @@ export default function App() {
       >
         <View.Port />
       </Canvas>
-      <Crosshair />
-      <HUD />
+      {localPlayer?.status === 'alive' && (
+        <>
+          <Crosshair />
+          <HUD />
+        </>
+      )}
+
+      {localPlayer?.status === 'dead' && <DeathScreen />}
       <ConnectionStats />
       <Stats />
     </div>

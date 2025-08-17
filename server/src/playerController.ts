@@ -9,10 +9,10 @@ export class PlayerController {
   private velocity = new THREE.Vector3();
 
   private readonly walkSpeed = .5;
-  private readonly sprintSpeed = 1.25; 
+  private readonly sprintSpeed = 1.25;
   private readonly jumpStrength = 1.25;
-  private readonly gravity = -10.0; 
- 
+  private readonly gravity = -10.0;
+
   constructor(world: RAPIER.World, initialPosition: RAPIER.Vector) {
     this.world = world;
 
@@ -28,8 +28,12 @@ export class PlayerController {
     this.controller.enableSnapToGround(0.25);
   }
 
-    public getBody(): RAPIER.RigidBody {
+  public getBody(): RAPIER.RigidBody {
     return this.body;
+  }
+
+  public teleport(position: { x: number; y: number; z: number }) {
+    this.body.setNextKinematicTranslation(position);
   }
 
   public update(input: PlayerInput, deltaTime: number) {
@@ -46,16 +50,16 @@ export class PlayerController {
     if (moveDirection.lengthSq() > 0) {
       moveDirection.normalize().applyQuaternion(playerRotation);
     }
-    
+
     const isOnGround = this.controller.computedGrounded();
-    
+
     if (isOnGround) {
-      this.velocity.y = this.gravity * deltaTime; 
+      this.velocity.y = this.gravity * deltaTime;
       if (input.inputs.jump) {
         this.velocity.y = this.jumpStrength;
       }
     } else {
-      this.velocity.y += this.gravity * deltaTime; 
+      this.velocity.y += this.gravity * deltaTime;
     }
 
     const currentSpeed = input.inputs.sprint ? this.sprintSpeed : this.walkSpeed;

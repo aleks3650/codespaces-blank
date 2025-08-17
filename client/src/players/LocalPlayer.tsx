@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { useMemo, useRef, useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useGraph } from '@react-three/fiber';
 import { useGLTF, useAnimations } from '@react-three/drei';
 import { SkeletonUtils } from 'three-stdlib';
@@ -14,75 +14,26 @@ const targetPosition = new THREE.Vector3();
 const LERP_FACTOR = 0.2;
 
 type PlayerAction = 'idle' | 'walk' | 'sprint';
+type ActionName = PlayerAction | 'die' | 'interact-right';
 
 const PLAYER_HEIGHT_OFFSET = -0.2;
 
 const LocalPlayer = () => {
   const localPlayerState = useSocketStore((state) => state.players[socket.id!]);
   const inputRef = useInputContext();
-
   const playerRef = useRef<THREE.Group>(null!);
-
   const setPlayerRef = useRefStore((state) => state.setPlayerRef);
-
-  useEffect(() => {
-    setPlayerRef(playerRef);
-    return () => setPlayerRef(null!);
-  }, [setPlayerRef]);
+  const lastActionTimestamp = useCharacterActionStore((state) => state.lastActionTimestamp);
 
   const { scene, animations } = useGLTF('/character.glb') as unknown as GLTFResult;
   const clone = useMemo(() => SkeletonUtils.clone(scene), [scene]);
   const { nodes, materials } = useGraph(clone) as unknown as GLTFResult;
-
-  const currentAction = useRef<PlayerAction>('idle');
   const { actions, mixer } = useAnimations(animations, playerRef);
 
-  const lastActionTimestamp = useCharacterActionStore((state) => state.lastActionTimestamp);
-
-
-  useEffect(() => {
-    if (!lastActionTimestamp) return;
-
-    const action = actions['interact-right'];
-    if (!action) return;
-
-    action.reset();
-    action.setLoop(THREE.LoopOnce, 1);
-    action.clampWhenFinished = true;
-
-    const currentMovementAction = actions[currentAction.current];
-    if (currentMovementAction) {
-      currentMovementAction.fadeOut(0.2);
-    }
-    action.fadeIn(0.1).play();
-
-    const onFinished = () => {
-      action.fadeOut(0.2);
-      const nextMovementAction = actions[currentAction.current];
-      if (nextMovementAction) {
-        nextMovementAction.reset().fadeIn(0.2).play();
-      }
-      mixer.removeEventListener('finished', onFinished);
-    };
-    mixer.addEventListener('finished', onFinished);
-  }, [lastActionTimestamp, actions, mixer]);
+  const currentAction = useRef<ActionName>('idle');
 
   useFrame(() => {
     if (!localPlayerState || !playerRef.current || !inputRef.current) return;
-
-    const { forward, backward, left, right, sprint } = inputRef.current;
-    let newAction: PlayerAction = 'idle';
-    if (forward || backward || left || right) {
-      newAction = sprint ? 'sprint' : 'walk';
-    }
-
-    if (currentAction.current !== newAction) {
-      const oldAction = actions[currentAction.current];
-      const nextAction = actions[newAction];
-      oldAction?.fadeOut(0.2);
-      nextAction?.reset().fadeIn(0.2).play();
-      currentAction.current = newAction;
-    }
 
     targetPosition.set(
       localPlayerState.position.x,
@@ -90,7 +41,58 @@ const LocalPlayer = () => {
       localPlayerState.position.z,
     );
     playerRef.current.position.lerp(targetPosition, LERP_FACTOR);
+
+    let targetActionName: ActionName;
+    const spellCastAction = actions['interact-right'];
+
+    if (localPlayerState.status === 'dead') {
+      targetActionName = 'die';
+    } else if (spellCastAction?.isRunning()) {
+      targetActionName = 'interact-right';
+    } else {
+      const { forward, backward, left, right, sprint } = inputRef.current;
+      if (forward || backward || left || right) {
+        targetActionName = sprint ? 'sprint' : 'walk';
+      } else {
+        targetActionName = 'idle';
+      }
+    }
+
+    if (currentAction.current !== targetActionName) {
+      const oldAction = actions[currentAction.current];
+      const newAction = actions[targetActionName];
+
+      oldAction?.fadeOut(0.2);
+
+      if (newAction) {
+        newAction.reset().fadeIn(0.2).play();
+
+        if (targetActionName === 'die' || targetActionName === 'interact-right') {
+          newAction.setLoop(THREE.LoopOnce, 1);
+          newAction.clampWhenFinished = true;
+        } else {
+          newAction.setLoop(THREE.LoopRepeat, Infinity);
+        }
+      }
+
+      currentAction.current = targetActionName;
+    }
   });
+
+  useMemo(() => {
+    if (!lastActionTimestamp) return;
+
+    const action = actions['interact-right'];
+    if (action) {
+      action.reset().play();
+    }
+  }, [lastActionTimestamp, actions, mixer]);
+
+  useEffect(() => {
+    setPlayerRef(playerRef);
+    actions.idle?.play(); 
+    return () => setPlayerRef(null!);
+  }, [setPlayerRef, actions.idle]);
 
   useGLTF.preload('/character.glb');
 

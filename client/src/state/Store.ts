@@ -8,7 +8,11 @@ export interface PlayerState {
   animationState: AnimationState; 
   health?: number; 
   mana?: number;
-  class?: string
+  class?: string;
+  status: 'alive' | 'dead';
+  respawnAt: number | null;
+  activeStatusEffects: ActiveStatusEffect[];
+
 }
 
 export interface GameStateFromServer {
@@ -81,3 +85,9 @@ export const useEffectStore = create<EffectState>((set) => ({
     set((state) => ({ effects: state.effects.filter((effect) => effect.id !== id) }));
   },
 }));
+
+export interface ActiveStatusEffect {
+  effectId: string;
+  expiresAt: number;
+  casterId: string;
+}

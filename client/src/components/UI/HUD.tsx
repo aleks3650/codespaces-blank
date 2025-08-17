@@ -14,8 +14,8 @@ export const HUD = () => {
   if (!localPlayer) {
     return null;
   }
-  const currentHealth = localPlayer.health ?? MAX_HEALTH; 
-  const currentMana = localPlayer.mana ?? MAX_MANA;
+  const currentHealth = +(localPlayer.health ?? MAX_HEALTH).toFixed(1); 
+  const currentMana = +(localPlayer.mana ?? MAX_MANA).toFixed(1);
 
   const healthPercentage = (currentHealth / MAX_HEALTH) * 100;
   const manaPercentage = (currentMana / MAX_MANA) * 100;
