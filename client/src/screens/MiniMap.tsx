@@ -29,7 +29,7 @@ export default function MiniMap() {
     <>
       <ambientLight intensity={1} />
       <Environment preset="sunset" />
-      <PerspectiveCamera ref={camRef} makeDefault fov={50} />
+      <PerspectiveCamera ref={camRef} makeDefault />
 
       <primitive object={environmentRef.current} />
       <primitive object={playerRef.current} />

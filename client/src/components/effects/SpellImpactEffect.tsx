@@ -33,7 +33,7 @@ export const SpellImpactEffect = ({ id, position }: SpellImpactEffectProps) => {
   return (
     <mesh ref={meshRef} position={position}>
       <sphereGeometry args={[0.3, 16, 16]} />
-      <meshStandardMaterial color="cyan" emissive="lightblue" transparent />
+      <meshStandardMaterial color="red" emissive="red" transparent  />
     </mesh>
   );
 };

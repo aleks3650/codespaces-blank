@@ -14,7 +14,7 @@ const EnvironmentItem = () => {
           mieDirectionalG={0.7}
         />
       </group>
-      <Environment preset="sunset" background={false} />{" "}
+      <Environment preset="sunset" background={false} />
       <ambientLight intensity={0.15} />
       <directionalLight
         castShadow

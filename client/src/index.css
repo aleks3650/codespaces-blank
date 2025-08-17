@@ -153,18 +153,17 @@ button:focus-visible {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%); /* Perfekcyjne centrowanie */
+  transform: translate(-50%, -50%); 
 
   width: 2px;
   height: 20px;
   background-color: white;
   border-radius: 2px;
-  box-shadow: 0 0 5px rgba(0, 0, 0, 0.5); /* Cień dla lepszej widoczności */
-  pointer-events: none; /* BARDZO WAŻNE: Ignoruje kliknięcia myszą */
-  z-index: 10; /* Upewnia się, że jest na wierzchu */
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.5); 
+  pointer-events: none; 
+  z-index: 10; 
 }
 
-/* Dodajemy drugi element ::after, aby stworzyć znak plusa */
 .crosshair::after {
   content: '';
   position: absolute;
@@ -182,16 +181,13 @@ button:focus-visible {
   position: absolute;
   bottom: 20px;
   left: 20px;
-  
   display: flex;
   flex-direction: column;
   gap: 10px;
-  
   color: white;
   font-family: sans-serif;
   text-shadow: 1px 1px 2px black;
-  
-  pointer-events: none; /* Ważne! */
+  pointer-events: none; 
   z-index: 10;
 }
 
@@ -212,23 +208,82 @@ button:focus-visible {
   background-color: rgba(0, 0, 0, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 4px;
-  overflow: hidden; /* Ukrywa to, co wystaje z paska wypełnienia */
+  overflow: hidden;
 }
 
 .stat-bar-fill {
   height: 100%;
-  transition: width 0.3s ease-in-out; /* Płynna animacja zmiany wartości */
+  transition: width 0.3s ease-in-out;
 }
 
 .stat-bar-fill.health {
-  background-color: #c0392b; /* Czerwony */
+  background-color: #c0392b; 
 }
 
 .stat-bar-fill.mana {
-  background-color: #2980b9; /* Niebieski */
+  background-color: #2980b9; 
 }
-
 .stat-bar-value {
   font-size: 14px;
-  min-width: 60px; /* Zapewnia stałą szerokość, aby UI nie "skakało" */
+  min-width: 60px; 
+}
+.character-select {
+  appearance: none;
+  -webkit-appearance: none; 
+  -moz-appearance: none;
+  
+  padding: 8px 40px 8px 20px; 
+  width: 300px;
+  height: 40px;
+  
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  
+  font-size: 16px;
+  font-family: Arial, sans-serif;
+  color: #333;
+  
+  background-color: #fff;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.character-select::after {
+  content: "\25bc"; 
+  position: absolute;
+  top: 50%;
+  right: 20px;
+  transform: translateY(-50%);
+  pointer-events: none; 
+  font-size: 12px;
+  color: #666;
+}
+
+.character-select:hover,
+.character-select:focus {
+  border-color: #666;
+  box-shadow: 0 0 8px rgba(0,0,0,0.1);
+  outline: none; 
+}
+
+.character-select option {
+  padding: 10px;
+  margin: 5px 0;
+  background-color: #fff;
+  color: #333;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.character-select option:hover {
+  background-color: #f0f0f0;
+}
+
+@supports not (appearance: none) {
+  .character-select {
+    background-image: url('data:image/svg+xml;utf8,<svg fill="black" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>');
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 24px;
+  }
 }

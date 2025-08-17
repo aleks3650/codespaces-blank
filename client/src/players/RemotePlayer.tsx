@@ -4,35 +4,30 @@ import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { SkeletonUtils } from "three-stdlib";
 import type { AnimationState, PlayerState } from "../state/Store";
-import { CharacterModel, type GLTFResult } from "../models/Character"; // Zaimportuj model i typy
+import { CharacterModel, type GLTFResult } from "../models/Character"; 
 
 const targetPosition = new THREE.Vector3();
 const targetQuaternion = new THREE.Quaternion();
 
-const PLAYER_HEIGHT_OFFSET = -0.2; // Taki sam offset jak w LocalPlayer
+const PLAYER_HEIGHT_OFFSET = -0.2; 
 
 const RemotePlayer = ({ position, rotation, animationState }: PlayerState) => {
     const groupRef = useRef<THREE.Group>(null!);
     const currentAction = useRef<AnimationState>('idle');
 
-    // --- Logika ładowania modelu (identyczna jak w LocalPlayer) ---
     const { scene, animations } = useGLTF('/character.glb') as unknown as GLTFResult;
     const clone = useMemo(() => SkeletonUtils.clone(scene), [scene]);
     const { nodes, materials } = useGraph(clone) as unknown as GLTFResult;
 
-    // --- Logika animacji ---
     const { actions } = useAnimations(animations, groupRef);
 
     useEffect(() => {
-        // Uruchom animację idle na starcie
         actions.idle?.fadeIn(0.2).play();
         return () => {
-            // Sprzątanie po odmontowaniu komponentu
             Object.values(actions).forEach(action => action?.fadeOut(0.2));
         };
     }, [actions]);
 
-    // Ten useEffect jest kluczowy: reaguje na zmiany stanu z serwera
     useEffect(() => {
         const newAction = animationState;
         
@@ -48,7 +43,6 @@ const RemotePlayer = ({ position, rotation, animationState }: PlayerState) => {
     }, [animationState, actions]);
 
 
-    // --- Logika interpolacji (bez zmian) ---
     useFrame(() => {
         if (!position || !rotation) return;
         
@@ -61,7 +55,6 @@ const RemotePlayer = ({ position, rotation, animationState }: PlayerState) => {
 
     return (
         <group ref={groupRef}>
-            {/* Zastępujemy kulę naszym modelem postaci */}
             <group position-y={PLAYER_HEIGHT_OFFSET}>
                 <CharacterModel nodes={nodes} materials={materials} />
             </group>

@@ -1,13 +1,13 @@
 import { Canvas } from "@react-three/fiber";
 import { Stats, View } from "@react-three/drei";
 import * as THREE from "three";
-import ConnectionStats from "./components/ConnectionStats";
-import { gl } from "./constants/constants";
-import Game from "./screens/Game";
-import MiniMap from "./screens/MiniMap";
-import { useSocketConnect } from "./hooks/useSocket";
-import { Crosshair } from "./components/UI/Crosshair";
-import { HUD } from "./components/UI/HUD";
+import ConnectionStats from "../components/ConnectionStats";
+import { gl } from "../constants/constants";
+import Game from "./Game";
+import MiniMap from "./MiniMap";
+import { useSocketConnect } from "../hooks/useSocket";
+import { Crosshair } from "../components/UI/Crosshair";
+import { HUD } from "../components/UI/HUD";
 
 export default function App() {
   useSocketConnect();

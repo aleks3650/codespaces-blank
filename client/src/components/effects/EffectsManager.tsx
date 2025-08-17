@@ -17,8 +17,7 @@ export const EffectsManager = () => {
       addEffect(data.hitPoint);
 
       if (data.hitPlayerId) {
-        // TODO: Możesz tu dodać dodatkową logikę, np. krótkie
-        // mignięcie trafionego gracza na czerwono.
+        // TODO: hit player visualization
       }
     };
 

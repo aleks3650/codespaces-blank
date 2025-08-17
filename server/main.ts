@@ -19,8 +19,6 @@ function gameLoop() {
 
   game.update(pendingInputs, deltaTime);
 
-  pendingInputs.clear();
-
   const liveGameState = game.getState();
 
   io.emit("gameState", liveGameState);

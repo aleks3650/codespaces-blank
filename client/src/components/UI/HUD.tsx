@@ -1,5 +1,3 @@
-// src/components/UI/HUD.tsx
-
 import { useSocketStore } from '../../state/Store';
 import { socket } from '../../socket/socket';
 

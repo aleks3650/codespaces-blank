@@ -1,7 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { PointerLockControls } from '@react-three/drei';
 import * as THREE from 'three';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { socket } from '../socket/socket';
 import { useInputContext } from '../context/InputContext';
 import { useCharacterActionStore, useRefStore } from '../state/Store';
@@ -16,11 +16,12 @@ const rayFromPlayer = new THREE.Vector3();
 
 const screenCenter = new THREE.Vector2(0, 0);
 
-
 export const PlayerControls = () => {
     const { camera } = useThree();
     const sendTimer = useRef(0);
     const raycaster = useMemo(() => new THREE.Raycaster(), []);
+    
+    const [isLocked, setIsLocked] = useState(false);
 
     const inputRef = useInputContext();
 
@@ -31,7 +32,7 @@ export const PlayerControls = () => {
 
     useEffect(() => {
         const handleMouseDown = (event: MouseEvent) => {
-            if (event.button !== 0) return;
+            if (!isLocked || event.button !== 0) return;
 
             raycaster.setFromCamera(screenCenter, camera);
             const sceneObjects = environmentRef?.current?.children ?? [];
@@ -65,7 +66,7 @@ export const PlayerControls = () => {
 
         document.addEventListener('mousedown', handleMouseDown);
         return () => document.removeEventListener('mousedown', handleMouseDown);
-    }, [camera, playerRef, environmentRef, triggerCast]); 
+    }, [camera, playerRef, environmentRef, triggerCast, isLocked]); 
 
 
     useFrame((_state, delta) => {
@@ -92,7 +93,7 @@ export const PlayerControls = () => {
 
         const firstHit = intersects[0];
         if (firstHit && firstHit.distance < rayLength) {
-            finalCameraPosition.copy(rayFromPlayer).add(rayDirection.multiplyScalar(firstHit.distance * 0.95));
+            finalCameraPosition.copy(rayFromPlayer).add(rayDirection.multiplyScalar(firstHit.distance * 0.9));
         } else {
             finalCameraPosition.copy(idealCameraPosition);
         }
@@ -109,5 +110,10 @@ export const PlayerControls = () => {
         }
     });
 
-    return <PointerLockControls />;
+    return (
+        <PointerLockControls 
+            onLock={() => setIsLocked(true)}
+            onUnlock={() => setIsLocked(false)}
+        />
+    );
 };

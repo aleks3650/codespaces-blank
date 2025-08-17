@@ -42,13 +42,11 @@ public applyDamage(targetId: string, damage: number) {
     }
   }
 
-  // ZMIENIONA METODA: Pełna logika obsługi akcji
   public handlePlayerAction(playerId: string, actionData: PlayerAction) {
     const playerState = this.players.get(playerId);
     if (!playerState) return;
 
     if (actionData.actionType === "castSpell") {
-      // Krok 1: Walidacja i zasady gry (np. mana, cooldown)
       if (playerState.mana < 10) {
         // Opcjonalnie: wyślij wiadomość do gracza "Brak many!"
         return; 
@@ -59,7 +57,6 @@ public applyDamage(targetId: string, damage: number) {
       // Krok 2: Zapytaj świat fizyki o wynik
       const result = this.physics.castRayForSpell(playerId, actionData.payload.direction);
 
-      // Krok 3: Przetwórz wynik i poinformuj klientów
       switch (result.type) {
         case "player":
           this.applyDamage(result.playerId, 20);
@@ -85,24 +82,22 @@ public applyDamage(targetId: string, damage: number) {
     this.physics.update(inputs, deltaTime);
   }
 
-public getState() { // Usunąłem argument `inputs`, jest już dostępny wewnątrz
+public getState() {
     const playersPhysicsState = this.physics.getState();
-    const liveGameState: { [id:string]: any } = {}; // Użyjemy `any` tymczasowo dla zwięzłości
+    const liveGameState: { [id:string]: any } = {}; 
 
     for (const id in playersPhysicsState.players) {
         const physicsState = playersPhysicsState.players[id];
-        const logicalState = this.players.get(id); // Pobieramy stan z HP/Maną
+        const logicalState = this.players.get(id); 
         
-        // Łączymy oba stany w jeden obiekt
         liveGameState[id] = {
             ...physicsState,
             health: logicalState?.health,
             mana: logicalState?.mana,
-            // ... w przyszłości można dodać więcej danych
+            class: logicalState.class
         };
     }
     
-    // Zwracamy pełny, połączony stan
     return { players: liveGameState };
   }
 }

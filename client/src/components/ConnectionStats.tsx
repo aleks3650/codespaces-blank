@@ -1,9 +1,15 @@
 import { socket } from "../socket/socket";
+import { useSocketStore } from "../state/Store";
+
+const selectLocalPlayer = (state: ReturnType<typeof useSocketStore.getState>) => {
+    return state.players[socket.id!];
+};
 
 const ConnectionStats = () => {
     const isConnected = socket.connected;
     const socketId = socket.id;
 
+    const data = useSocketStore(selectLocalPlayer);
     return (
         <div
             style={{
@@ -25,6 +31,9 @@ const ConnectionStats = () => {
         >
             {isConnected && <h1 style={{ fontSize: "14px" }}>ID: {socketId}
             </h1>}
+            {data?.class && (
+                <h2 style={{ fontSize: "10px" }}>Class: {data.class}</h2>
+            )}
         </div>
     );
 };

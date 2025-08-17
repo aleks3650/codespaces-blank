@@ -8,6 +8,7 @@ export interface PlayerState {
   animationState: AnimationState; 
   health?: number; 
   mana?: number;
+  class?: string
 }
 
 export interface GameStateFromServer {
