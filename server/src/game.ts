@@ -2,12 +2,14 @@ import { io } from "./helpers/IO_Server.ts";
 import { LivePlayerState, PlayerAction, PlayerInput, PlayerState, ActiveStatusEffect } from "./helpers/types.ts";
 import { PhysicsWorld } from "./physics.ts";
 import { IActionCommand, CastSpellCommand } from "./commands/actionCommands.ts";
-import {statusEffectData} from './gameData/statusEffects.ts'
+import { statusEffectData } from './gameData/statusEffects.ts'
+import { MAX_MANA } from "./helpers/constants.ts";
 
 export type AnimationState = 'idle' | 'walk' | 'sprint';
 
 const RESPAWN_TIME_MS = 5000;
 const SPAWN_POINT = { x: 1.5, y: 1.5, z: 0.0 };
+const MANA_REGEN_PER_SECOND = .1
 
 export class Game {
   public physics: PhysicsWorld;
@@ -51,12 +53,10 @@ export class Game {
 
     const newHealth = targetPlayer.health - damage;
 
-    const clampedHealth = Math.max(0, newHealth);
-    
-    targetPlayer.health = Math.round(clampedHealth * 100) / 100;
+    targetPlayer.health = newHealth
 
     if (targetPlayer.health <= 0) {
-      targetPlayer.health = 0; 
+      targetPlayer.health = 0;
       targetPlayer.status = 'dead';
       targetPlayer.respawnAt = Date.now() + RESPAWN_TIME_MS;
       targetPlayer.activeStatusEffects = [];
@@ -109,6 +109,7 @@ export class Game {
         }
       } else {
         this._processStatusEffects(player, deltaTime);
+        this._regenerateMana(player, deltaTime);
         const input = inputs.get(player.id);
         if (input) {
           alivePlayerInputs.set(player.id, input);
@@ -128,44 +129,51 @@ export class Game {
     io.emit("player-respawn", { playerId: player.id, position: SPAWN_POINT });
   }
 
-  // NOWA METODA do przetwarzania efektów
+private _regenerateMana(player: PlayerState, deltaTime: number) {
+  if (player.mana >= MAX_MANA) return;
+
+  const regenAmount = MANA_REGEN_PER_SECOND * deltaTime;
+  player.mana = Math.min(MAX_MANA, player.mana + regenAmount);
+}
+
+private _formatNumber(value: number, decimals: number = 1){
+  return Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals);
+}
+
   private _processStatusEffects(player: PlayerState, deltaTime: number) {
-    // Usuń wygasłe efekty
     player.activeStatusEffects = player.activeStatusEffects.filter(
       (effect) => effect.expiresAt > Date.now()
     );
 
-    // Zastosuj logikę aktywnych efektów
     for (const effect of player.activeStatusEffects) {
       const effectDef = statusEffectData.get(effect.effectId);
       if (effectDef?.damagePerSecond) {
-        // Przekazujemy ID rzucającego efekt jako zabójcę
         this.applyDamage(player.id, effectDef.damagePerSecond * deltaTime, effect.casterId);
       }
     }
   }
 
-  public getState() {
-    const playersPhysicsState = this.physics.getState();
-    const liveGameState: { [id: string]: LivePlayerState } = {};
+public getState() {
+  const playersPhysicsState = this.physics.getState();
+  const liveGameState: { [id: string]: LivePlayerState } = {};
 
-    for (const id in playersPhysicsState.players) {
-      const physicsState = playersPhysicsState.players[id];
-      const logicalState = this.players.get(id);
+  for (const id in playersPhysicsState.players) {
+    const physicsState = playersPhysicsState.players[id];
+    const logicalState = this.players.get(id);
 
-      if (logicalState) {
-        liveGameState[id] = {
-          position: physicsState.position,
-          rotation: physicsState.rotation,
-          health: logicalState.health,
-          mana: logicalState.mana,
-          class: logicalState.class,
-          status: logicalState.status, 
-          respawnAt: logicalState.respawnAt
-        };
-      }
+    if (logicalState) {
+      liveGameState[id] = {
+        position: physicsState.position,
+        rotation: physicsState.rotation,
+        health: this._formatNumber(logicalState.health),
+        mana: this._formatNumber(logicalState.mana),
+        class: logicalState.class,
+        status: logicalState.status,
+        respawnAt: logicalState.respawnAt
+      };
     }
-
-    return { players: liveGameState };
   }
+
+  return { players: liveGameState };
+}
 }
