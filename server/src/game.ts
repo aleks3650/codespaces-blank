@@ -1,23 +1,27 @@
-import { io } from "./helpers/IO_Server.ts";
 import { LivePlayerState, PlayerAction, PlayerInput, PlayerState, ActiveStatusEffect } from "./helpers/types.ts";
 import { PhysicsWorld } from "./physics.ts";
 import { IActionCommand, CastSpellCommand } from "./commands/actionCommands.ts";
 import { statusEffectData } from './gameData/statusEffects.ts'
 import { MAX_MANA } from "./helpers/constants.ts";
+import { GameEventManager } from "./gameEventManager.ts";
+import { GameEventType } from "./helpers/gameEvents.ts";
 
 export type AnimationState = 'idle' | 'walk' | 'sprint';
 
 const RESPAWN_TIME_MS = 5000;
 const SPAWN_POINT = { x: 1.5, y: 1.5, z: 0.0 };
 const MANA_REGEN_PER_SECOND = .1
+const DOT_FLUSH_INTERVAL_MS = 1000;
 
 export class Game {
   public physics: PhysicsWorld;
+  public eventManager: GameEventManager;
   private players: Map<string, PlayerState> = new Map();
   private actionHandlers: Map<string, IActionCommand<unknown>>;
 
   constructor() {
     this.physics = new PhysicsWorld();
+    this.eventManager = new GameEventManager();
 
     this.actionHandlers = new Map();
     this.actionHandlers.set("castSpell", new CastSpellCommand());
@@ -55,6 +59,17 @@ export class Game {
 
     targetPlayer.health = newHealth
 
+    const playersPhysicsState = this.physics.getState();
+    const targetPhysicsState = playersPhysicsState.players[targetId];
+
+    this.eventManager.queueEvent(GameEventType.PlayerDamaged, {
+      playerId: targetId,
+      damage: damage,
+      newHealth: this._formatNumber(newHealth),
+      attackerId: killerId,
+      position: targetPhysicsState.position
+    });
+
     if (targetPlayer.health <= 0) {
       targetPlayer.health = 0;
       targetPlayer.status = 'dead';
@@ -62,7 +77,11 @@ export class Game {
       targetPlayer.activeStatusEffects = [];
 
       console.log(`Player ${targetId} was killed by ${killerId}`);
-      io.emit("player-death", { playerId: targetId, killerId: killerId });
+
+      this.eventManager.queueEvent(GameEventType.PlayerDeath, {
+        playerId: targetId,
+        killerId: killerId,
+      })
     }
   }
 
@@ -82,7 +101,12 @@ export class Game {
     targetPlayer.activeStatusEffects = targetPlayer.activeStatusEffects.filter(e => e.effectId !== effectId);
     targetPlayer.activeStatusEffects.push(newEffect);
 
-    io.emit("status-effect-applied", { targetId, effectId });
+    this.eventManager.queueEvent(GameEventType.StatusEffectGained, {
+      targetId: targetId,
+      effectId: effectId,
+      duration: newEffect.expiresAt - Date.now(),
+      casterId: casterId,
+    });
   }
 
   public handlePlayerAction(playerId: string, actionData: PlayerAction) {
@@ -117,6 +141,7 @@ export class Game {
       }
     }
     this.physics.update(alivePlayerInputs, deltaTime);
+    this.eventManager.dispatchEvents()
   }
 
   private _respawnPlayer(player: PlayerState) {
@@ -126,54 +151,82 @@ export class Game {
     player.respawnAt = null;
     this.physics.teleportPlayer(player.id, SPAWN_POINT);
     console.log(`Player ${player.id} has respawned.`);
-    io.emit("player-respawn", { playerId: player.id, position: SPAWN_POINT });
+
+    this.eventManager.queueEvent(GameEventType.PlayerRespawn, {
+      playerId: player.id,
+      position: SPAWN_POINT,
+      newHealth: player.health,
+      newMana: player.mana,
+    });
   }
 
-private _regenerateMana(player: PlayerState, deltaTime: number) {
-  if (player.mana >= MAX_MANA) return;
+  private _regenerateMana(player: PlayerState, deltaTime: number) {
+    if (player.mana >= MAX_MANA) return;
 
-  const regenAmount = MANA_REGEN_PER_SECOND * deltaTime;
-  player.mana = Math.min(MAX_MANA, player.mana + regenAmount);
-}
+    const regenAmount = MANA_REGEN_PER_SECOND * deltaTime;
+    player.mana = Math.min(MAX_MANA, player.mana + regenAmount);
+  }
 
-private _formatNumber(value: number, decimals: number = 1){
-  return Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals);
-}
+  private _formatNumber(value: number, decimals: number = 1) {
+    return Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals);
+  }
 
   private _processStatusEffects(player: PlayerState, deltaTime: number) {
     player.activeStatusEffects = player.activeStatusEffects.filter(
       (effect) => effect.expiresAt > Date.now()
     );
 
+    if (!player.accumulatedDotDamage) {
+      player.accumulatedDotDamage = 0;
+    }
+    if (!player.lastDotFlushTime) {
+      player.lastDotFlushTime = Date.now();
+    }
+
     for (const effect of player.activeStatusEffects) {
       const effectDef = statusEffectData.get(effect.effectId);
       if (effectDef?.damagePerSecond) {
-        this.applyDamage(player.id, effectDef.damagePerSecond * deltaTime, effect.casterId);
+        player.accumulatedDotDamage += effectDef.damagePerSecond * deltaTime;
       }
     }
-  }
 
-public getState() {
-  const playersPhysicsState = this.physics.getState();
-  const liveGameState: { [id: string]: LivePlayerState } = {};
+    const now = Date.now();
+    if (now - player.lastDotFlushTime >= DOT_FLUSH_INTERVAL_MS) {
+      if (player.accumulatedDotDamage > 0) {
+        const damageToSend = Math.round(player.accumulatedDotDamage);
 
-  for (const id in playersPhysicsState.players) {
-    const physicsState = playersPhysicsState.players[id];
-    const logicalState = this.players.get(id);
+        if (damageToSend > 0) {
+          const lastCasterId = player.activeStatusEffects[0]?.casterId ?? 'system';
+          this.applyDamage(player.id, damageToSend, lastCasterId);
+        }     
 
-    if (logicalState) {
-      liveGameState[id] = {
-        position: physicsState.position,
-        rotation: physicsState.rotation,
-        health: this._formatNumber(logicalState.health),
-        mana: this._formatNumber(logicalState.mana),
-        class: logicalState.class,
-        status: logicalState.status,
-        respawnAt: logicalState.respawnAt
-      };
+        player.accumulatedDotDamage = 0;
+      }
+      player.lastDotFlushTime = now;
     }
   }
 
-  return { players: liveGameState };
-}
+  public getState() {
+    const playersPhysicsState = this.physics.getState();
+    const liveGameState: { [id: string]: LivePlayerState } = {};
+
+    for (const id in playersPhysicsState.players) {
+      const physicsState = playersPhysicsState.players[id];
+      const logicalState = this.players.get(id);
+
+      if (logicalState) {
+        liveGameState[id] = {
+          position: physicsState.position,
+          rotation: physicsState.rotation,
+          health: this._formatNumber(logicalState.health),
+          mana: this._formatNumber(logicalState.mana),
+          class: logicalState.class,
+          status: logicalState.status,
+          respawnAt: logicalState.respawnAt
+        };
+      }
+    }
+
+    return { players: liveGameState };
+  }
 }

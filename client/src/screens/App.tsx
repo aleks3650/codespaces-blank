@@ -11,6 +11,7 @@ import { HUD } from "../components/UI/HUD";
 import { useSocketStore } from "../state/Store";
 import { socket } from "../socket/socket";
 import { DeathScreen } from "../components/UI/DeathScreen";
+import { Notifications } from "../components/UI/Notifications";
 
 export default function App() {
   useSocketConnect();
@@ -42,6 +43,7 @@ export default function App() {
 
       {localPlayer?.status === 'dead' && <DeathScreen />}
       <ConnectionStats />
+      <Notifications />
       <Stats />
     </div>
   );

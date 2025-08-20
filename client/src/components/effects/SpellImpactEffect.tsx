@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { useMemo, useRef } from 'react';
+import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useEffectStore } from '../../state/Store';
 
@@ -8,20 +8,12 @@ interface SpellImpactEffectProps {
   position: THREE.Vector3;
 }
 
-const PLAYER_HEIGHT_OFFSET = -0.2;
 const EFFECT_DURATION = 0.75;
 
 export const SpellImpactEffect = ({ id, position }: SpellImpactEffectProps) => {
   const meshRef = useRef<THREE.Mesh>(null!);
   const lifeTimer = useRef(0);
   const removeEffect = useEffectStore((state) => state.removeEffect);
-
-  const {x,y,z} = position
-
-  const renderPos = useMemo(
-    () => new THREE.Vector3(x, y + PLAYER_HEIGHT_OFFSET, z),
-    [x, y, z]
-  );
 
   useFrame((_, delta) => {
     lifeTimer.current += delta;
@@ -39,7 +31,7 @@ export const SpellImpactEffect = ({ id, position }: SpellImpactEffectProps) => {
   });
 
   return (
-    <mesh ref={meshRef} position={renderPos}>
+    <mesh ref={meshRef} position={position}>
       <sphereGeometry args={[0.3, 16, 16]} />
       <meshStandardMaterial color="red" emissive="red" transparent />
     </mesh>

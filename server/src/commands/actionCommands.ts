@@ -1,7 +1,7 @@
 import { Game } from "../game.ts";
 import { CastSpellPayload } from "../helpers/types.ts";
 import { spellData } from "../gameData/spells.ts";
-import { io } from "../helpers/IO_Server.ts";
+import { GameEventType } from "../helpers/gameEvents.ts";
 
 export interface IActionCommand<T> {
     execute(game: Game, playerId: string, payload: T): void;
@@ -22,10 +22,20 @@ export class CastSpellCommand implements IActionCommand<CastSpellPayload> {
 
         const cooldownEndsAt = playerState.spellCooldowns.get(spell.id) ?? 0;
         if (Date.now() < cooldownEndsAt) {
+            game.eventManager.queueEvent(
+                GameEventType.SpellOnCooldown,
+                { spellId: spell.id, remainingMs: cooldownEndsAt - Date.now() },
+                playerId
+            );
             return;
         }
 
         if (playerState.mana < spell.manaCost) {
+            game.eventManager.queueEvent(
+                GameEventType.SpellCastFailed,
+                { reason: 'not_enough_mana' },
+                playerId
+            )
             return;
         }
 
@@ -40,13 +50,26 @@ export class CastSpellCommand implements IActionCommand<CastSpellPayload> {
                 if (spell.appliesEffectId) {
                     game.applyStatusEffect(result.playerId, spell.appliesEffectId, playerId);
                 }
-                io.emit("spell-impact", { casterId: playerId, hitPlayerId: result.playerId, hitPoint: result.point });
+                game.eventManager.queueEvent(GameEventType.SpellImpactPlayer, {
+                    spellId: spell.id,
+                    casterId: playerId,
+                    hitPlayerId: result.playerId,
+                    hitPoint: result.point
+                });
                 break;
             case "world":
-                io.emit("spell-impact", { casterId: playerId, hitPoint: result.point });
+                game.eventManager.queueEvent(GameEventType.SpellImpactWorld, {
+                    spellId: spell.id,
+                    casterId: playerId,
+                    hitPoint: result.point
+                });
                 break;
             case "miss":
-                io.emit("spell-miss", { casterId: playerId, direction: payload.direction });
+                game.eventManager.queueEvent(
+                    GameEventType.SpellCastFailed,
+                    { reason: 'missed' },
+                    playerId
+                )
                 break;
         }
     }

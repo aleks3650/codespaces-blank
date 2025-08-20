@@ -1,32 +1,9 @@
-import { useEffect } from 'react';
-import { socket } from '../../socket/socket'; 
 import { useEffectStore } from '../../state/Store';
 import { SpellImpactEffect } from './SpellImpactEffect';
 
-interface SpellImpactData {
-  casterId: string;
-  hitPlayerId?: string;
-  hitPoint: { x: number; y: number; z: number };
-}
-
 export const EffectsManager = () => {
-  const { effects, addEffect } = useEffectStore();
 
-  useEffect(() => {
-    const onSpellImpact = (data: SpellImpactData) => {
-      addEffect(data.hitPoint);
-
-      if (data.hitPlayerId) {
-        // TODO: hit player visualization
-      }
-    };
-
-    socket.on('spell-impact', onSpellImpact);
-
-    return () => {
-      socket.off('spell-impact', onSpellImpact);
-    };
-  }, [addEffect]);
+  const { effects } = useEffectStore()
 
   return (
     <>

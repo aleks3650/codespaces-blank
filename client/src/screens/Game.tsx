@@ -5,6 +5,7 @@ import LocalPlayer from "../players/LocalPlayer";
 import { PlayerControls } from "../players/PlayerControls";
 import RemotePlayers from "../players/RemotePlayers";
 import { EffectsManager } from "../components/effects/EffectsManager";
+import { FloatingTextManager } from "../components/effects/FloatingTextManager";
 
 const Game = () => {
 
@@ -16,6 +17,7 @@ const Game = () => {
             <PlayerControls />
             <Effects />
             <EffectsManager />
+            <FloatingTextManager />
         </InputControlsProvider>
     );
 };

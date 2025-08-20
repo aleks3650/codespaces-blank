@@ -24,6 +24,8 @@ export interface PlayerState {
   status: "alive" | "dead";
   respawnAt: number | null;
   activeStatusEffects: ActiveStatusEffect[];
+  accumulatedDotDamage?: number;
+  lastDotFlushTime?: number;
 }
 
 export interface CastSpellPayload {
@@ -52,7 +54,7 @@ export interface LivePlayerState {
 }
 
 export interface ActiveStatusEffect {
-  effectId: string; 
-  expiresAt: number; 
-  casterId: string; 
+  effectId: string;
+  expiresAt: number;
+  casterId: string;
 }
