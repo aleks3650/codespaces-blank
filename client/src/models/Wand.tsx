@@ -17,8 +17,7 @@ type GLTFResult = GLTF & {
   }
 }
 
-//@ts-ignore
-export const Wand = forwardRef<THREE.Group, JSX.IntrinsicElements['group']>((props, ref) => {
+export const Wand = forwardRef<THREE.Group, React.JSX.IntrinsicElements['group']>((props, ref) => {
   const { nodes, materials } = useGLTF('/chopstick.glb') as unknown as GLTFResult
   return (
     <group ref={ref} {...props} dispose={null}>

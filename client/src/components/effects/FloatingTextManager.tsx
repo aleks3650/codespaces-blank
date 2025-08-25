@@ -3,7 +3,6 @@ import { FloatingText } from './FloatingText';
 
 export const FloatingTextManager = () => {
   const texts = useFloatingTextStore((state) => state.texts);
-  console.log(texts)
 
   return (
     <>

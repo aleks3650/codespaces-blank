@@ -13,8 +13,9 @@ import { socket } from "../socket/socket";
 import { DeathScreen } from "../components/UI/DeathScreen";
 import { Notifications } from "../components/UI/Notifications";
 
-export default function App() {
-  useSocketConnect();
+export default function App({ selectedClass }: { selectedClass: string }) {
+  useSocketConnect(selectedClass);
+
   const localPlayer = useSocketStore((state) => state.players[socket.id!]);
 
   return (

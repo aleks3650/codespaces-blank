@@ -3,17 +3,22 @@ import { socket } from "../socket/socket";
 import * as THREE from 'three'
 import { type GameStateFromServer, useEffectStore, useSocketStore } from "../state/Store";
 import { useFloatingTextStore } from "../state/FloatingTextStore";
-import { useNotificationStore } from "../state/NotificationStore"; 
+import { useNotificationStore } from "../state/NotificationStore";
 
 interface GameEvent { type: string; payload: any; }
 
-export function useSocketConnect() {
+export function useSocketConnect(selectedClass: string) {
+
   const setGameState = useSocketStore((state) => state.setGameState);
   const addEffect = useEffectStore((state) => state.addEffect);
   const addFloatingText = useFloatingTextStore((state) => state.addText);
   const addNotification = useNotificationStore((state) => state.addNotification);
 
   useEffect(() => {
+    socket.auth = { playerClass: selectedClass };
+
+    socket.connect();
+
     const showDamageNumber = (payload: any) => {
       if (!payload.position) return;
       const basePosition = new THREE.Vector3(payload.position.x, payload.position.y, payload.position.z);
@@ -40,7 +45,7 @@ export function useSocketConnect() {
             break;
 
           case 'player-damaged':
-            showDamageNumber(event.payload); 
+            showDamageNumber(event.payload);
             break;
 
           case 'spell-on-cooldown':
@@ -49,13 +54,13 @@ export function useSocketConnect() {
 
           case 'spell-cast-failed':
             if (event.payload.reason === 'not_enough_mana') {
-              addNotification("Not enough mana", 'info'); 
+              addNotification("Not enough mana", 'info');
             }
             break;
-            
+
           case 'status-effect-gained':
             if (event.payload.targetId === socket.id) {
-               addNotification(`Affected by: ${event.payload.effectId}`, 'info');
+              addNotification(`Affected by: ${event.payload.effectId}`, 'info');
             }
             break;
         }
@@ -76,8 +81,9 @@ export function useSocketConnect() {
       socket.off("disconnect", onDisconnect);
       socket.off("gameState", onGameState);
       socket.off("game-events", onGameEvents);
+      socket.disconnect()
     };
-  }, [setGameState, addEffect, addFloatingText, addNotification]); 
+  }, [setGameState, addEffect, addFloatingText, addNotification]);
 
   return {};
 }

@@ -1,10 +1,11 @@
-import { LivePlayerState, PlayerAction, PlayerInput, PlayerState, ActiveStatusEffect } from "./helpers/types.ts";
+import { LivePlayerState, PlayerAction, PlayerInput, PlayerState, ActiveStatusEffect, PlayerClass } from "./helpers/types.ts";
 import { PhysicsWorld } from "./physics.ts";
 import { IActionCommand, CastSpellCommand } from "./commands/actionCommands.ts";
 import { statusEffectData } from './gameData/statusEffects.ts'
 import { MAX_MANA } from "./helpers/constants.ts";
 import { GameEventManager } from "./gameEventManager.ts";
 import { GameEventType } from "./helpers/gameEvents.ts";
+import { classData } from "./gameData/classes.ts";
 
 export type AnimationState = 'idle' | 'walk' | 'sprint';
 
@@ -31,12 +32,14 @@ export class Game {
     return this.players.get(id);
   }
 
-  public addNewPlayer(id: string) {
+  public addNewPlayer(id: string, playerClass: string) {
+    const stats = classData.get(playerClass) ?? classData.get("Mage")!;
+
     const newPlayer: PlayerState = {
       id,
-      class: "Mage",
-      health: 100,
-      mana: 100,
+      class: playerClass as PlayerClass,
+      health: stats.baseHealth,
+      mana: stats.baseMana,
       spellCooldowns: new Map(),
       status: "alive",
       respawnAt: null,
@@ -198,7 +201,7 @@ export class Game {
         if (damageToSend > 0) {
           const lastCasterId = player.activeStatusEffects[0]?.casterId ?? 'system';
           this.applyDamage(player.id, damageToSend, lastCasterId);
-        }     
+        }
 
         player.accumulatedDotDamage = 0;
       }

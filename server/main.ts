@@ -4,6 +4,8 @@ import { TICK_RATE } from "./src/helpers/constants.ts";
 import { io } from "./src/helpers/IO_Server.ts";
 import { PlayerAction, PlayerInput } from "./src/helpers/types.ts";
 
+const ALLOWED_CLASSES = ["Mage", "Warrior"];
+
 await RAPIER.init();
 
 const game = new Game();
@@ -29,8 +31,11 @@ function gameLoop() {
 }
 
 io.on("connection", (socket) => {
-  console.log(`socket ${socket.id} connected`);
-  game.addNewPlayer(socket.id);
+  const chosenClass = String(socket.handshake.auth.playerClass);
+  const playerClass = ALLOWED_CLASSES.includes(chosenClass) ? chosenClass : "Mage";
+
+  console.log(`socket ${socket.id} connected as a ${playerClass}`);
+  game.addNewPlayer(socket.id, playerClass);
 
   socket.on("player-inputs", (data: PlayerInput) => {
     data.playerId = socket.id;

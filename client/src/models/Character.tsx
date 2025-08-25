@@ -1,51 +1,53 @@
-import * as THREE from 'three'
-import React, { useRef, useLayoutEffect } from 'react'
-import { useGraph } from '@react-three/fiber'
-import { useGLTF, useAnimations } from '@react-three/drei'
-import { SkeletonUtils } from 'three-stdlib'
-import type { GLTF } from 'three-stdlib'
-import { Wand } from './Wand'
+import * as THREE from 'three';
+import React, { useRef, useLayoutEffect } from 'react';
+import type { GLTF } from 'three-stdlib';
+import { WEAPON_CONFIG } from '../config/weaponConfig';
 
-type ActionName = 'static' | 'idle' | 'walk' | 'sprint' | 'jump' | 'fall' | 'crouch' | 'sit' | 'drive' | 'die' | 'pick-up' | 'emote-yes' | 'emote-no' | 'holding-right' | 'holding-left' | 'holding-both' | 'holding-right-shoot' | 'holding-left-shoot' | 'holding-both-shoot' | 'attack-melee-right' | 'attack-melee-left' | 'attack-kick-right' | 'attack-kick-left' | 'interact-right' | 'interact-left' | 'wheelchair-sit' | 'wheelchair-look-left' | 'wheelchair-look-right' | 'wheelchair-move-forward' | 'wheelchair-move-back' | 'wheelchair-move-left' | 'wheelchair-move-right'
+type ActionName = 'static' | 'idle' | 'walk' | 'sprint' | 'jump' | 'fall' | 'crouch' | 'sit' | 'drive' | 'die' | 'pick-up' | 'emote-yes' | 'emote-no' | 'holding-right' | 'holding-left' | 'holding-both' | 'holding-right-shoot' | 'holding-left-shoot' | 'holding-both-shoot' | 'attack-melee-right' | 'attack-melee-left' | 'attack-kick-right' | 'attack-kick-left' | 'interact-right' | 'interact-left' | 'wheelchair-sit' | 'wheelchair-look-left' | 'wheelchair-look-right' | 'wheelchair-move-forward' | 'wheelchair-move-back' | 'wheelchair-move-left' | 'wheelchair-move-right';
 
 interface GLTFAction extends THREE.AnimationClip {
-  name: ActionName
+  name: ActionName;
 }
 
 export type GLTFResult = GLTF & {
   nodes: {
-    ['body-mesh']: THREE.SkinnedMesh
-    ['head-mesh']: THREE.SkinnedMesh
-    root: THREE.Bone
-  }
+    ['body-mesh']: THREE.SkinnedMesh;
+    ['head-mesh']: THREE.SkinnedMesh;
+    root: THREE.Bone;
+  };
   materials: {
-    colormap: THREE.MeshStandardMaterial
-  }
-  animations: GLTFAction[]
-}
+    colormap: THREE.MeshStandardMaterial;
+  };
+  animations: GLTFAction[];
+};
 
-// @ts-ignore
-export function CharacterModel(props: JSX.IntrinsicElements['group']) {
-  const group = React.useRef<THREE.Group>(null)
-  const bodyRef = useRef<THREE.SkinnedMesh>(null)
-  const itemRef = useRef<THREE.Group>(null)
+type CharacterModelProps = React.JSX.IntrinsicElements['group'] & {
+  nodes: GLTFResult['nodes'];
+  materials: GLTFResult['materials'];
+  characterClass: string;
+};
 
-  const { scene, animations } = useGLTF('/character.glb')
-  const clone = React.useMemo(() => SkeletonUtils.clone(scene), [scene])
-  const { nodes, materials } = useGraph(clone) as unknown as GLTFResult
-  const { actions: _actions } = useAnimations(animations, group)
+export function CharacterModel({ nodes, materials, characterClass, ...props }: CharacterModelProps) {
+  const group = React.useRef<THREE.Group>(null);
+  const bodyRef = useRef<THREE.SkinnedMesh>(null);
+  const itemRef = useRef<THREE.Group>(null);
+
+  const weaponConfig = WEAPON_CONFIG[characterClass];
+  const WeaponComponent = weaponConfig?.component;
 
   useLayoutEffect(() => {
-    if (!bodyRef.current || !itemRef.current) return;
+    if (!bodyRef.current || !itemRef.current || !weaponConfig) return;
 
     const skeleton = bodyRef.current.skeleton;
-    const handBone = skeleton.getBoneByName('arm-right'); 
+    const handBone = skeleton.getBoneByName('arm-right');
 
     if (handBone) {
       handBone.add(itemRef.current);
-      itemRef.current.position.set(-0.22, 0, .2); 
-      itemRef.current.rotation.set(0, 0, Math.PI / 2); 
-      itemRef.current.scale.set(2, 2, 1); 
+
+      const { position, rotation, scale } = weaponConfig.transform;
+      itemRef.current.position.copy(position);
+      itemRef.current.rotation.copy(rotation);
+      itemRef.current.scale.copy(scale);
     }
 
     return () => {
@@ -53,10 +55,10 @@ export function CharacterModel(props: JSX.IntrinsicElements['group']) {
         handBone.remove(itemRef.current);
       }
     };
-  }, []);
+  }, [weaponConfig]);
 
   return (
-    <group ref={group} {...props} dispose={null} scale={0.1}>
+    <group ref={group} {...props} dispose={null}>
       <group name="character-male-b" rotation={[0, Math.PI, 0]}>
         <group name="character-male-b_1">
           <primitive object={nodes.root} />
@@ -73,11 +75,9 @@ export function CharacterModel(props: JSX.IntrinsicElements['group']) {
             material={materials.colormap}
             skeleton={nodes['head-mesh'].skeleton}
           />
-          <Wand ref={itemRef}/>
+          {WeaponComponent && <WeaponComponent ref={itemRef} />}
         </group>
       </group>
     </group>
-  )
+  );
 }
-
-useGLTF.preload('/character.glb')
