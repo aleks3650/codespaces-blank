@@ -26,6 +26,7 @@ export interface PlayerState {
   activeStatusEffects: ActiveStatusEffect[];
   accumulatedDotDamage?: number;
   lastDotFlushTime?: number;
+  animationState: AnimationState
 }
 
 export interface CastSpellPayload {
@@ -51,6 +52,7 @@ export interface LivePlayerState {
   class: PlayerClass;
   status: "alive" | "dead";
   respawnAt: number | null;
+  animationState: AnimationState
 }
 
 export interface ActiveStatusEffect {
@@ -58,3 +60,6 @@ export interface ActiveStatusEffect {
   expiresAt: number;
   casterId: string;
 }
+
+export type AnimationState = "idle" | "walk" | "sprint" | "fall";
+

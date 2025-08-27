@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { socket } from "../socket/socket";
 import * as THREE from 'three'
-import { type GameStateFromServer, useEffectStore, useSocketStore } from "../state/Store";
+import { type GameStateFromServer, useCharacterActionStore, useEffectStore, useSocketStore } from "../state/Store";
 import { useFloatingTextStore } from "../state/FloatingTextStore";
 import { useNotificationStore } from "../state/NotificationStore";
 
@@ -12,7 +12,9 @@ export function useSocketConnect(selectedClass: string) {
   const setGameState = useSocketStore((state) => state.setGameState);
   const addEffect = useEffectStore((state) => state.addEffect);
   const addFloatingText = useFloatingTextStore((state) => state.addText);
-  const addNotification = useNotificationStore((state) => state.addNotification);
+  const addNotification = useNotificationStore((state) => state.addNotification); 
+  const triggerCast = useCharacterActionStore((state) => state.triggerCast);
+
 
   useEffect(() => {
     socket.auth = { playerClass: selectedClass };
@@ -46,6 +48,9 @@ export function useSocketConnect(selectedClass: string) {
 
           case 'player-damaged':
             showDamageNumber(event.payload);
+            break;
+          case 'player-cast-spell':
+            triggerCast(event.payload.casterId);
             break;
 
           case 'spell-on-cooldown':
@@ -83,7 +88,7 @@ export function useSocketConnect(selectedClass: string) {
       socket.off("game-events", onGameEvents);
       socket.disconnect()
     };
-  }, [setGameState, addEffect, addFloatingText, addNotification]);
+  }, [setGameState, addEffect, addFloatingText, addNotification, triggerCast]);
 
   return {};
 }

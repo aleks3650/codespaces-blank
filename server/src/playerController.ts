@@ -27,6 +27,9 @@ export class PlayerController {
     this.controller.enableAutostep(0.5, 0.2, true);
     this.controller.enableSnapToGround(0.25);
   }
+  public isOnGround(): boolean {
+    return this.controller.computedGrounded()
+  }
 
   public getBody(): RAPIER.RigidBody {
     return this.body;

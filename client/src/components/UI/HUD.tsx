@@ -1,8 +1,6 @@
 import { useSocketStore } from '../../state/Store';
 import { socket } from '../../socket/socket';
-
-const MAX_HEALTH = 100;
-const MAX_MANA = 100;
+import { classData } from '../../constants/classes';
 
 const selectLocalPlayer = (state: ReturnType<typeof useSocketStore.getState>) => {
   return state.players[socket.id!];
@@ -14,6 +12,11 @@ export const HUD = () => {
   if (!localPlayer) {
     return null;
   }
+
+  const data = classData.get(localPlayer.class || 'Mage')
+  const MAX_HEALTH = data?.baseHealth ?? 100;
+  const MAX_MANA = data?.baseMana ?? 100;
+
   const currentHealth = +(localPlayer.health ?? MAX_HEALTH).toFixed(1); 
   const currentMana = +(localPlayer.mana ?? MAX_MANA).toFixed(1);
 

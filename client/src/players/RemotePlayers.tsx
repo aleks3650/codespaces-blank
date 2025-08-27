@@ -6,15 +6,14 @@ const selectPlayers = (state: ReturnType<typeof useSocketStore.getState>) => sta
 
 const RemotePlayers = () => {
     const allPlayers = useSocketStore(selectPlayers);
-    
+
     const remotePlayers = Object.fromEntries(
         Object.entries(allPlayers).filter(([id]) => id !== socket.id)
     );
-
     return (
         <>
             {Object.entries(remotePlayers).map(([id, playerState]) => (
-                <RemotePlayer key={id} {...playerState} />
+                <RemotePlayer key={id} id={id} {...playerState} />
             ))}
         </>
     );

@@ -42,6 +42,11 @@ export class CastSpellCommand implements IActionCommand<CastSpellPayload> {
         playerState.mana -= spell.manaCost;
         playerState.spellCooldowns.set(spell.id, Date.now() + spell.cooldown * 1000);
 
+        game.eventManager.queueEvent(GameEventType.PlayerCastSpell, {
+            casterId: playerId,
+            spellId: spell.id
+        })
+
         const result = game.physics.castRayForSpell(playerId, payload.direction, spell.range);
 
         switch (result.type) {

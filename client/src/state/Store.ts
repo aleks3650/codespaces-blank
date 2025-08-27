@@ -5,8 +5,8 @@ import type { RefObject } from "react";
 export interface PlayerState {
   position: { x: number; y: number; z: number };
   rotation: { x: number; y: number; z: number; w: number };
-  animationState: AnimationState; 
-  health?: number; 
+  animationState: AnimationState;
+  health?: number;
   mana?: number;
   class?: string;
   status: 'alive' | 'dead';
@@ -16,23 +16,23 @@ export interface PlayerState {
 }
 
 export interface GameStateFromServer {
-    players: { [id: string]: PlayerState };
+  players: { [id: string]: PlayerState };
 }
 
-export type AnimationState = 'idle' | 'walk' | 'sprint';
+export type AnimationState = 'idle' | 'walk' | 'sprint' | 'fall';
 
 interface SocketStore {
-    players: { [id: string]: PlayerState };
+  players: { [id: string]: PlayerState };
 
-    setGameState: (newState: GameStateFromServer) => void;
+  setGameState: (newState: GameStateFromServer) => void;
 }
 
 export const useSocketStore = create<SocketStore>((set) => ({
-    players: {},
+  players: {},
 
-    setGameState: (newState) => set({
-        players: newState.players
-    }),
+  setGameState: (newState) => set({
+    players: newState.players
+  }),
 }));
 
 interface RefStore {
@@ -45,23 +45,28 @@ interface RefStore {
 export const useRefStore = create<RefStore>((set) => ({
   playerRef: null,
   environmentRef: null,
-  
+
   setPlayerRef: (ref) => set({ playerRef: ref }),
   setEnvironmentRef: (ref) => set({ environmentRef: ref }),
 }));
 
 interface ActionState {
-  lastActionTimestamp: number | null;
+  actionTimestamps: Record<string, number>;
 }
 
 interface ActionMethods {
-  triggerCast: () => void;
+  triggerCast: (playerId: string) => void;
 }
 
 export const useCharacterActionStore = create<ActionState & ActionMethods>((set) => ({
-  lastActionTimestamp: null,
-  triggerCast: () => set({ lastActionTimestamp: Date.now() }), 
-}))
+  actionTimestamps: {},
+  triggerCast: (playerId) => set((state) => ({
+    actionTimestamps: {
+      ...state.actionTimestamps,
+      [playerId]: Date.now(),
+    }
+  })),
+}));
 
 interface Effect {
   id: string;

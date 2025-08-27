@@ -1,13 +1,10 @@
-import { LivePlayerState, PlayerAction, PlayerInput, PlayerState, ActiveStatusEffect, PlayerClass } from "./helpers/types.ts";
+import { LivePlayerState, PlayerAction, PlayerInput, PlayerState, ActiveStatusEffect, PlayerClass, AnimationState } from "./helpers/types.ts";
 import { PhysicsWorld } from "./physics.ts";
 import { IActionCommand, CastSpellCommand } from "./commands/actionCommands.ts";
 import { statusEffectData } from './gameData/statusEffects.ts'
-import { MAX_MANA } from "./helpers/constants.ts";
 import { GameEventManager } from "./gameEventManager.ts";
 import { GameEventType } from "./helpers/gameEvents.ts";
 import { classData } from "./gameData/classes.ts";
-
-export type AnimationState = 'idle' | 'walk' | 'sprint';
 
 const RESPAWN_TIME_MS = 5000;
 const SPAWN_POINT = { x: 1.5, y: 1.5, z: 0.0 };
@@ -43,7 +40,8 @@ export class Game {
       spellCooldowns: new Map(),
       status: "alive",
       respawnAt: null,
-      activeStatusEffects: []
+      activeStatusEffects: [],
+      animationState: "idle"
     };
     this.players.set(id, newPlayer);
     this.physics.addPlayer(id);
@@ -139,6 +137,20 @@ export class Game {
         this._regenerateMana(player, deltaTime);
         const input = inputs.get(player.id);
         if (input) {
+          const controller = this.physics.getPlayerController(player.id);
+          if (controller) {
+            let newState: AnimationState = "idle";
+
+            if (!controller.isOnGround()) {
+              newState = "fall";
+            } else {
+              const isMoving = input.inputs.forward || input.inputs.backward || input.inputs.left || input.inputs.right;
+              if (isMoving) {
+                newState = input.inputs.sprint ? "sprint" : "walk";
+              }
+            }
+            player.animationState = newState;
+          }
           alivePlayerInputs.set(player.id, input);
         }
       }
@@ -148,9 +160,10 @@ export class Game {
   }
 
   private _respawnPlayer(player: PlayerState) {
+    const data = classData.get(player.class)
     player.status = 'alive';
-    player.health = 100;
-    player.mana = 100;
+    player.health = data.baseHealth;
+    player.mana = data.baseMana;
     player.respawnAt = null;
     this.physics.teleportPlayer(player.id, SPAWN_POINT);
     console.log(`Player ${player.id} has respawned.`);
@@ -164,10 +177,12 @@ export class Game {
   }
 
   private _regenerateMana(player: PlayerState, deltaTime: number) {
-    if (player.mana >= MAX_MANA) return;
+    const { baseMana } = classData.get(player.class)
+
+    if (player.mana >= baseMana) return;
 
     const regenAmount = MANA_REGEN_PER_SECOND * deltaTime;
-    player.mana = Math.min(MAX_MANA, player.mana + regenAmount);
+    player.mana = Math.min(baseMana, player.mana + regenAmount);
   }
 
   private _formatNumber(value: number, decimals: number = 1) {
@@ -225,7 +240,8 @@ export class Game {
           mana: this._formatNumber(logicalState.mana),
           class: logicalState.class,
           status: logicalState.status,
-          respawnAt: logicalState.respawnAt
+          respawnAt: logicalState.respawnAt,
+          animationState: logicalState.animationState
         };
       }
     }

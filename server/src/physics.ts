@@ -31,6 +31,10 @@ export class PhysicsWorld {
     console.log("Map collider initialized.");
   }
 
+  public getPlayerController(playerId: string): PlayerController | undefined {
+    return this.playerControllers.get(playerId);
+  }
+
   public addPlayer(playerId: string) {
     const initialPos = { x: 1.5, y: 1.5, z: 0.0 };
     const controller = new PlayerController(this.world, initialPos);

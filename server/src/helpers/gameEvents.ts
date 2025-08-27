@@ -11,6 +11,7 @@ export enum GameEventType {
   SpellOnCooldown = 'spell-on-cooldown',
 
   PlayerRespawn = 'player-respawn',
+  PlayerCastSpell = 'player-cast-spell',
 }
 
 export interface GameEventPayloads {
@@ -19,7 +20,11 @@ export interface GameEventPayloads {
     damage: number;
     newHealth: number;
     attackerId: string;
-    position: {x:number, y: number, z: number}
+    position: { x: number, y: number, z: number }
+  };
+  [GameEventType.PlayerCastSpell]: {
+    casterId: string;
+    spellId: string;
   };
   [GameEventType.PlayerDeath]: {
     playerId: string;
