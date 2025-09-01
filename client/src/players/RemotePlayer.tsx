@@ -7,6 +7,7 @@ import { SkeletonUtils } from 'three-stdlib';
 import { useCharacterActionStore, type PlayerState } from '../state/Store';
 import { CharacterModel, type GLTFResult } from '../models/Character';
 import { WEAPON_CONFIG } from '../config/weaponConfig';
+// import { ColliderBox } from '../components/ColliderBox';
 
 type ActionName = GLTFResult['animations'][number]['name'];
 
@@ -20,7 +21,7 @@ type RemotePlayerProps = PlayerState & {
 
 const RemotePlayer = ({ id, position, rotation, status, animationState, class: characterClass }: RemotePlayerProps) => {
     const groupRef = useRef<THREE.Group>(null!);
-    
+
     const activeAction = useRef<ActionName>('idle');
 
     const { scene, animations } = useGLTF('/character.glb') as unknown as GLTFResult;
@@ -44,7 +45,7 @@ const RemotePlayer = ({ id, position, rotation, status, animationState, class: c
             const serverState = status === 'dead' ? 'die' : animationState.toLowerCase();
             targetAction = serverState as ActionName;
         }
-        
+
         if (lastAttackTimestamp > (groupRef.current as any)._lastProcessedAttack) {
             targetAction = attackAnimationName;
             (groupRef.current as any)._lastProcessedAttack = lastAttackTimestamp;
@@ -53,8 +54,8 @@ const RemotePlayer = ({ id, position, rotation, status, animationState, class: c
         if (activeAction.current !== targetAction) {
             const oldAction = actions[activeAction.current];
             const newAction = actions[targetAction];
-            
-            if (!newAction) return; 
+
+            if (!newAction) return;
 
             oldAction?.fadeOut(0.2);
             newAction.reset().fadeIn(0.2).play();
@@ -68,7 +69,7 @@ const RemotePlayer = ({ id, position, rotation, status, animationState, class: c
 
             activeAction.current = targetAction;
         }
-        
+
         if (position && rotation) {
             targetPosition.set(position.x, position.y, position.z);
             targetQuaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
@@ -78,7 +79,7 @@ const RemotePlayer = ({ id, position, rotation, status, animationState, class: c
     });
 
     useEffect(() => {
-        if(groupRef.current) {
+        if (groupRef.current) {
             (groupRef.current as any)._lastProcessedAttack = 0;
         }
     }, [])
@@ -91,7 +92,7 @@ const RemotePlayer = ({ id, position, rotation, status, animationState, class: c
 
     return (
         <group ref={groupRef} dispose={null}>
-            <group position-y={-0.2}>
+            <group position-y={-0.045}>
                 <CharacterModel
                     nodes={nodes}
                     materials={materials}
@@ -99,6 +100,7 @@ const RemotePlayer = ({ id, position, rotation, status, animationState, class: c
                     scale={0.1}
                 />
             </group>
+                {/* <ColliderBox length={.04} radius={.025} /> */}
         </group>
     );
 };

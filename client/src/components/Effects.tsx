@@ -6,6 +6,7 @@ import {
   Vignette,
   Noise,
   SMAA,
+  DepthOfField,
 } from "@react-three/postprocessing";
 import { BlendFunction } from "postprocessing";
 
@@ -19,9 +20,14 @@ export function Effects() {
         luminanceSmoothing={0.03}
       />
       <HueSaturation saturation={0.1} />
-      <BrightnessContrast brightness={-0.1} contrast={0.15} />
+      <BrightnessContrast brightness={-0.1} contrast={0.55} />
       <Vignette eskil={false} offset={0.12} darkness={0.1} />
       <Noise premultiply blendFunction={BlendFunction.SCREEN} opacity={0.015} />
+      <DepthOfField 
+        focusDistance={.02} 
+        focalLength={.02}
+        bokehScale={2}
+      />
       <SMAA />
     </EffectComposer>
   );

@@ -9,52 +9,47 @@ import { useCharacterActionStore, useRefStore, useSocketStore } from '../state/S
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 const newPlayerRotation = new THREE.Quaternion();
 
-const cameraOffset = new THREE.Vector3(0, -0.1, 0.3);
+const cameraOffset = new THREE.Vector3(0, 0.08, 0.4);
+
 const idealCameraPosition = new THREE.Vector3();
 const finalCameraPosition = new THREE.Vector3();
 const rayFromPlayer = new THREE.Vector3();
-
 const screenCenter = new THREE.Vector2(0, 0);
 
 export const PlayerControls = () => {
     const { camera } = useThree();
     const sendTimer = useRef(0);
     const raycaster = useMemo(() => new THREE.Raycaster(), []);
-
     const [isLocked, setIsLocked] = useState(false);
-
     const inputRef = useInputContext();
-
     const playerRef = useRefStore((state) => state.playerRef);
     const environmentRef = useRefStore((state) => state.environmentRef);
-
     const triggerCast = useCharacterActionStore((state) => state.triggerCast);
 
     useEffect(() => {
         const handleMouseDown = (event: MouseEvent) => {
             const localPlayerStatus = useSocketStore.getState().players[socket.id!]?.status;
-            
-            if (!isLocked || event.button !== 0 || localPlayerStatus === 'dead') {
+            if (!isLocked || event.button !== 0 || localPlayerStatus === 'dead' || !playerRef?.current) {
                 return;
             }
 
+            playerRef.current.visible = false;
             raycaster.setFromCamera(screenCenter, camera);
             const sceneObjects = environmentRef?.current?.children ?? [];
             const intersects = raycaster.intersectObjects(sceneObjects, true);
+            playerRef.current.visible = true; 
 
             let targetPoint = new THREE.Vector3();
-
             if (intersects.length > 0) {
                 targetPoint = intersects[0].point;
             } else {
-                targetPoint = raycaster.ray.at(10, targetPoint);
+                targetPoint = raycaster.ray.at(100, targetPoint);
             }
-
-            if (!playerRef?.current) return;
 
             const spellOrigin = new THREE.Vector3();
             playerRef.current.getWorldPosition(spellOrigin);
-            spellOrigin.y += 0.3;
+
+            spellOrigin.y += 0.03;
 
             const correctedDirection = targetPoint.sub(spellOrigin).normalize();
 
@@ -65,12 +60,12 @@ export const PlayerControls = () => {
                     direction: [correctedDirection.x, correctedDirection.y, correctedDirection.z],
                 }
             });
-            triggerCast();
+            triggerCast(socket.id!);
         };
 
         document.addEventListener('mousedown', handleMouseDown);
         return () => document.removeEventListener('mousedown', handleMouseDown);
-    }, [camera, playerRef, environmentRef, triggerCast, isLocked]);
+    }, [camera, playerRef, environmentRef, triggerCast, isLocked, raycaster]);
 
 
     useFrame((_state, delta) => {
@@ -89,10 +84,10 @@ export const PlayerControls = () => {
         const rotatedOffset = cameraOffset.clone().applyQuaternion(camera.quaternion);
         idealCameraPosition.copy(playerPosition).add(rotatedOffset);
 
-        rayFromPlayer.copy(playerPosition).add(new THREE.Vector3(0, 0.3, 0));
+        rayFromPlayer.copy(playerPosition).add(new THREE.Vector3(0, 0.03, 0));
+
         const rayDirection = idealCameraPosition.clone().sub(rayFromPlayer).normalize();
         const rayLength = idealCameraPosition.distanceTo(rayFromPlayer);
-
         raycaster.set(rayFromPlayer, rayDirection);
         const intersects = raycaster.intersectObjects(environmentRef.current.children, true);
 

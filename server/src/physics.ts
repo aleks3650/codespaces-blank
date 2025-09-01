@@ -36,7 +36,7 @@ export class PhysicsWorld {
   }
 
   public addPlayer(playerId: string) {
-    const initialPos = { x: 1.5, y: 1.5, z: 0.0 };
+    const initialPos = { x: 1.0, y: 1.5, z: 0.0 };
     const controller = new PlayerController(this.world, initialPos);
     this.playerControllers.set(playerId, controller);
   }
@@ -54,7 +54,7 @@ export class PhysicsWorld {
     if (!casterController) return { type: "miss" };
 
     const origin = casterController.getState().position;
-    const rayOrigin = new RAPIER.Vector3(origin.x, origin.y + 0.3, origin.z);
+    const rayOrigin = new RAPIER.Vector3(origin.x, origin.y + 0.03, origin.z);
     const rayDirection = new RAPIER.Vector3(direction[0], direction[1], direction[2]);
 
     const ray = new RAPIER.Ray(rayOrigin, rayDirection);

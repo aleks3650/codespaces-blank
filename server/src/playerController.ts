@@ -20,7 +20,7 @@ export class PlayerController {
       .setTranslation(initialPosition.x, initialPosition.y, initialPosition.z);
     this.body = world.createRigidBody(rigidBodyDesc);
 
-    const colliderDesc = RAPIER.ColliderDesc.capsule(0.15, 0.05);
+    const colliderDesc = RAPIER.ColliderDesc.capsule(0.02, 0.025);
     world.createCollider(colliderDesc, this.body);
 
     this.controller = world.createCharacterController(0.001);

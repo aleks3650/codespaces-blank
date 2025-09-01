@@ -11,7 +11,7 @@ const EnvironmentItem = () => {
           turbidity={1.5}
           rayleigh={.2}
           mieCoefficient={0.003}
-          mieDirectionalG={0.7}
+          mieDirectionalG={0.99}
         />
       </group>
       <Environment preset="sunset" background={false} />

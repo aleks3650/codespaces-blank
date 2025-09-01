@@ -8,6 +8,7 @@ import { useCharacterActionStore, useRefStore, useSocketStore } from '../state/S
 import { socket } from '../socket/socket';
 import { CharacterModel, type GLTFResult } from '../models/Character';
 import { WEAPON_CONFIG } from '../config/weaponConfig';
+// import { ColliderBox } from '../components/ColliderBox';
 
 type ActionName = GLTFResult['animations'][number]['name'];
 
@@ -98,7 +99,7 @@ const LocalPlayer = () => {
 
     return (
         <group ref={playerRef} dispose={null}>
-            <group position-y={-0.2}>
+            <group position-y={-0.045}>
                 <CharacterModel
                     nodes={nodes}
                     materials={materials}
@@ -106,6 +107,7 @@ const LocalPlayer = () => {
                     scale={0.1}
                 />
             </group>
+            {/* <ColliderBox length={.04} radius={.025} /> */}
         </group>
     );
 };
