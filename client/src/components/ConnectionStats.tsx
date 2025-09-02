@@ -29,10 +29,11 @@ const ConnectionStats = () => {
                 margin: "10px"
             }}
         >
-            {isConnected && <h1 style={{ fontSize: "14px" }}>ID: {socketId}
+            {isConnected && <h1 style={{ fontSize: "14px" }}>
+                Class: {data.class}
             </h1>}
             {data?.class && (
-                <h2 style={{ fontSize: "10px" }}>Class: {data.class}</h2>
+                <h2 style={{ fontSize: "10px" }}>ID: {socketId}</h2>
             )}
         </div>
     );

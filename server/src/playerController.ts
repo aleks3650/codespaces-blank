@@ -12,6 +12,7 @@ export class PlayerController {
   private readonly sprintSpeed = 1.25;
   private readonly jumpStrength = 1.25;
   private readonly gravity = -10.0;
+  private readonly MAX_SLOPE_ANGLE = 25.0;
 
   constructor(world: RAPIER.World, initialPosition: RAPIER.Vector) {
     this.world = world;
@@ -27,8 +28,43 @@ export class PlayerController {
     this.controller.enableAutostep(0.5, 0.2, true);
     this.controller.enableSnapToGround(0.25);
   }
+
   public isOnGround(): boolean {
-    return this.controller.computedGrounded()
+    if (!this.controller.computedGrounded()) {
+      return false;
+    }
+
+    const origin = this.body.translation();
+    const rayOrigin = new RAPIER.Vector3(origin.x, origin.y, origin.z);
+    const rayDirection = new RAPIER.Vector3(0, -1, 0);
+    const ray = new RAPIER.Ray(rayOrigin, rayDirection);
+    
+    const maxDistance = 0.2;
+    const solid = true;
+
+    const filterPredicate = (collider: RAPIER.Collider) => {
+      return collider.handle !== this.body.collider(0).handle;
+    };
+
+    const hit = this.world.castRayAndGetNormal(
+      ray,
+      maxDistance,
+      solid,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      filterPredicate
+    );
+
+    if (hit) {
+      const minGroundNormalY = Math.cos(this.MAX_SLOPE_ANGLE * (Math.PI / 180.0));
+      if (hit.normal.y >= minGroundNormalY) {
+        return true;
+      }
+    }
+    
+    return false;
   }
 
   public getBody(): RAPIER.RigidBody {
@@ -54,7 +90,7 @@ export class PlayerController {
       moveDirection.normalize().applyQuaternion(playerRotation);
     }
 
-    const isOnGround = this.controller.computedGrounded();
+    const isOnGround = this.isOnGround();
 
     if (isOnGround) {
       this.velocity.y = this.gravity * deltaTime;

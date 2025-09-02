@@ -7,7 +7,7 @@ import { GameEventType } from "./helpers/gameEvents.ts";
 import { classData } from "./gameData/classes.ts";
 
 const RESPAWN_TIME_MS = 5000;
-const SPAWN_POINT = { x: 1.5, y: 1.5, z: 0.0 };
+const SPAWN_POINT = { x: 1, y: 1.5, z: 0.0 };
 const MANA_REGEN_PER_SECOND = .1
 const DOT_FLUSH_INTERVAL_MS = 1000;
 

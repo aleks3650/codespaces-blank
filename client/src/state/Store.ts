@@ -96,3 +96,13 @@ export interface ActiveStatusEffect {
   expiresAt: number;
   casterId: string;
 }
+
+interface LoadingState {
+  isSceneReady: boolean;
+  setSceneReady: (isReady: boolean) => void;
+}
+
+export const useLoadingStore = create<LoadingState>((set) => ({
+  isSceneReady: false,
+  setSceneReady: (isReady) => set({ isSceneReady: isReady }),
+}));

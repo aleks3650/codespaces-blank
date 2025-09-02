@@ -33,11 +33,11 @@ export const PlayerControls = () => {
                 return;
             }
 
-            playerRef.current.visible = false;
+            // playerRef.current.visible = false;
             raycaster.setFromCamera(screenCenter, camera);
             const sceneObjects = environmentRef?.current?.children ?? [];
             const intersects = raycaster.intersectObjects(sceneObjects, true);
-            playerRef.current.visible = true; 
+            // playerRef.current.visible = true; 
 
             let targetPoint = new THREE.Vector3();
             if (intersects.length > 0) {
