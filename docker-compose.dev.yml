@@ -1,0 +1,21 @@
+# docker-compose.dev.yml
+
+services:
+  frontend:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      target: dev
+    ports:
+      - "5174:5173"
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    volumes:
+      - ./server:/app
+    command: deno task dev

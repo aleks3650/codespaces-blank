@@ -1,18 +1,19 @@
+# docker-compose.yml
+
 services:
   frontend:
-    build: ./client
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+      target: prod  
     ports:
-      - "5173:5173"
-    volumes:
-      - ./client:/app
-      - /app/node_modules
+      - "5173:80"
     environment:
       - VITE_API_URL=http://localhost:8000
-      # - VITE_API_URL=https://studious-succotash-5p696gw7r543vq49-8000.app.github.dev
 
   backend:
-    build: ./server
+    build:
+      context: ./server
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    volumes:
-      - ./server:/app
