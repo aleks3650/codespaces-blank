@@ -27,11 +27,11 @@ export function Effects() {
       <Bloom
         mipmapBlur
         intensity={0.35}
-        luminanceThreshold={0.9}
+        luminanceThreshold={0.19}
         luminanceSmoothing={0.2}
       />
       <HueSaturation hue={0.02} saturation={0.05} />
-      <BrightnessContrast brightness={-0.05} contrast={0.15} />
+      <BrightnessContrast brightness={-0.1} contrast={0.15} />
       <Vignette eskil={false} offset={0.15} darkness={0.5} />
       <Noise
         premultiply
@@ -39,9 +39,9 @@ export function Effects() {
         opacity={0.03}
       />
       <DepthOfField
-        focusDistance={0.015}
-        focalLength={0.02}
-        bokehScale={1.5}
+        focusDistance={.1}
+        focalLength={.7}
+        bokehScale={2.5}
       />
       <SMAA />
     </EffectComposer>

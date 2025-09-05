@@ -5,6 +5,7 @@ import { Mapsko } from "../models/Map";
 const EnvironmentItem = () => {
   return (
     <>
+      <fog attach="fog" args={['#86a5b1', .5, 7.5]} />
       <group rotation={[Math.PI, 0, 0]}>
         <Sky
           sunPosition={[5, 10, 0]}
