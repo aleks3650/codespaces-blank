@@ -144,9 +144,16 @@ export class Game {
             if (!controller.isOnGround()) {
               newState = "fall";
             } else {
-              const isMoving = input.inputs.forward || input.inputs.backward || input.inputs.left || input.inputs.right;
-              if (isMoving) {
-                newState = input.inputs.sprint ? "sprint" : "walk";
+              const { forward, backward, left, right, sprint } = input.inputs;
+              const isMoving = forward || backward || left || right;
+              const isPureForward = forward && !backward && !left && !right;
+
+              if (!isMoving) {
+                newState = "idle";
+              } else if (isPureForward && sprint) {
+                newState = "sprint";
+              } else {
+                newState = "walk";
               }
             }
             player.animationState = newState;

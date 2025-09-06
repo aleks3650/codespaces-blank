@@ -5,7 +5,7 @@ import { PlayerControls } from "../players/PlayerControls";
 import RemotePlayers from "../players/RemotePlayers";
 import { EffectsManager } from "../components/effects/EffectsManager";
 import { FloatingTextManager } from "../components/effects/FloatingTextManager";
-import { Effects } from "../components/Effects";
+// import { Effects } from "../components/Effects";
 import { SceneReadySignal } from "../components/SceneReadySignal";
 
 const Game = () => {
@@ -18,7 +18,7 @@ const Game = () => {
             <PlayerControls />
             <EffectsManager />
             <FloatingTextManager />
-            <Effects />
+            {/* <Effects /> */}
             <SceneReadySignal />
         </InputControlsProvider>
     );

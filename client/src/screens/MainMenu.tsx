@@ -14,7 +14,7 @@ const MainMenu = () => {
 
     return (
         <div className="main-menu-container">
-            <h1 className="game-title">Game name</h1>
+            <h1 className="game-title">PolyBrawl</h1>
             <select 
                 id="class" 
                 name="class" 

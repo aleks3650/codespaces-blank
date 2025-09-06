@@ -1,29 +1,33 @@
-import { Canvas } from "@react-three/fiber";
-import { Stats, View } from "@react-three/drei";
-import * as THREE from "three";
-import ConnectionStats from "../components/ConnectionStats";
-import { gl } from "../constants/constants";
-import Game from "./Game";
-import MiniMap from "./MiniMap";
-import { useSocketConnect } from "../hooks/useSocket";
-import { Crosshair } from "../components/UI/Crosshair";
-import { HUD } from "../components/UI/HUD";
-import { useSocketStore } from "../state/Store";
-import { socket } from "../socket/socket";
-import { DeathScreen } from "../components/UI/DeathScreen";
-import { Notifications } from "../components/UI/Notifications";
-import { Suspense } from "react";
-import { useLoadingStore } from "../state/Store";
-import { LoadingScreen } from "./LoadingScreen";
+import { useRef } from 'react';
+import { Canvas } from '@react-three/fiber';
+import { View, Stats } from '@react-three/drei';
+import '../index.css'; 
+import Game from './Game';
+import MiniMap from './MiniMap'; 
+import { useSocketConnect } from '../hooks/useSocket';
+import { Crosshair } from '../components/UI/Crosshair';
+import { HUD } from '../components/UI/HUD';
+import { DeathScreen } from '../components/UI/DeathScreen';
+import { Notifications } from '../components/UI/Notifications';
+import ConnectionStats from '../components/ConnectionStats';
+import { useSocketStore, useLoadingStore } from '../state/Store';
+import { socket } from '../socket/socket';
+import * as THREE from 'three';
+import { gl } from '../constants/constants';
+import { Suspense } from 'react';
+import { LoadingScreen } from './LoadingScreen';
 
 export default function App({ selectedClass }: { selectedClass: string }) {
   useSocketConnect(selectedClass);
-
   const localPlayer = useSocketStore((state) => state.players[socket.id!]);
   const isSceneReady = useLoadingStore((state) => state.isSceneReady);
 
+  const mainViewRef = useRef(null!);
+  const minimapViewRef = useRef(null!);
+
   return (
-    <div className="container">
+    <div ref={mainViewRef} className="container">
+      <div ref={minimapViewRef} className="view2" />
       <Canvas
         gl={gl}
         shadows={{ enabled: true, type: THREE.PCFSoftShadowMap }}
@@ -31,14 +35,14 @@ export default function App({ selectedClass }: { selectedClass: string }) {
         onCreated={(state) => (state.gl.autoClear = false)}
       >
         <Suspense fallback={<LoadingScreen />}>
-          <View index={1} className="view1">
+          <View index={1} track={mainViewRef}>
             <Game />
           </View>
-          <View index={2} className="view2">
+          <View index={2} track={minimapViewRef}>
             <MiniMap />
           </View>
-          <View.Port />
         </Suspense>
+        <View.Port />
       </Canvas>
       
       {isSceneReady && localPlayer?.status === 'alive' && (
@@ -47,7 +51,6 @@ export default function App({ selectedClass }: { selectedClass: string }) {
           <HUD />
         </>
       )}
-
       {localPlayer?.status === 'dead' && <DeathScreen />}
       <ConnectionStats />
       <Notifications />

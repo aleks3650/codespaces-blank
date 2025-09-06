@@ -75,44 +75,46 @@ export class PlayerController {
     this.body.setNextKinematicTranslation(position);
   }
 
-  public update(input: PlayerInput, deltaTime: number) {
-    const [x, y, z, w] = input.rotation;
-    this.body.setRotation({ x, y, z, w }, true);
-    const playerRotation = new THREE.Quaternion(x, y, z, w);
+public update(input: PlayerInput, deltaTime: number) {
+  const [x, y, z, w] = input.rotation;
+  this.body.setRotation({ x, y, z, w }, true);
+  const playerRotation = new THREE.Quaternion(x, y, z, w);
 
-    const moveDirection = new THREE.Vector3();
-    if (input.inputs.forward) moveDirection.z -= 1;
-    if (input.inputs.backward) moveDirection.z += 1;
-    if (input.inputs.left) moveDirection.x -= 1;
-    if (input.inputs.right) moveDirection.x += 1;
+  const rawDir = new THREE.Vector3();
+  if (input.inputs.forward) rawDir.z -= 1;
+  if (input.inputs.backward) rawDir.z += 1;
+  if (input.inputs.left) rawDir.x -= 1;
+  if (input.inputs.right) rawDir.x += 1;
 
-    if (moveDirection.lengthSq() > 0) {
-      moveDirection.normalize().applyQuaternion(playerRotation);
-    }
-
-    const isOnGround = this.isOnGround();
-
-    if (isOnGround) {
-      this.velocity.y = this.gravity * deltaTime;
-      if (input.inputs.jump) {
-        this.velocity.y = this.jumpStrength;
-      }
-    } else {
-      this.velocity.y += this.gravity * deltaTime;
-    }
-
-    const currentSpeed = input.inputs.sprint ? this.sprintSpeed : this.walkSpeed;
-
-    this.velocity.x = moveDirection.x * currentSpeed;
-    this.velocity.z = moveDirection.z * currentSpeed;
-
-    const movement = this.velocity.clone().multiplyScalar(deltaTime);
-    this.controller.computeColliderMovement(this.body.collider(0), movement);
-
-    const correctedMovement = this.controller.computedMovement();
-    const newPos = new THREE.Vector3().copy(this.body.translation()).add(correctedMovement);
-    this.body.setNextKinematicTranslation(newPos);
+  const moveDir = rawDir.clone();
+  if (moveDir.lengthSq() > 0) {
+    moveDir.normalize().applyQuaternion(playerRotation);
   }
+
+  const onGround = this.isOnGround();
+  if (onGround) {
+    this.velocity.y = this.gravity * deltaTime;
+    if (input.inputs.jump) {
+      this.velocity.y = this.jumpStrength;
+    }
+  } else {
+    this.velocity.y += this.gravity * deltaTime;
+  }
+
+  const isPureForward = rawDir.z < 0 && rawDir.x === 0;
+  const canSprint     = isPureForward && input.inputs.sprint;
+  const currentSpeed  = canSprint ? this.sprintSpeed : this.walkSpeed;
+
+  this.velocity.x = moveDir.x * currentSpeed;
+  this.velocity.z = moveDir.z * currentSpeed;
+
+  const movement = this.velocity.clone().multiplyScalar(deltaTime);
+  this.controller.computeColliderMovement(this.body.collider(0), movement);
+  const resolved = this.controller.computedMovement();
+  const newPos   = new THREE.Vector3().copy(this.body.translation()).add(resolved);
+  this.body.setNextKinematicTranslation(newPos);
+}
+
 
   public getState() {
     return {
