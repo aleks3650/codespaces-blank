@@ -3,3 +3,9 @@ docker-compose up --build -d
 
     Development:
 docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+
+
+todo
+    zabezpieczenie zeby nie mozan bylo biegać i atakowac
+    remote player animacje
+    mongo do przechowywania danych i logowanie jwt

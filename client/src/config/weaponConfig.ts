@@ -11,6 +11,7 @@ export type WeaponConfig = {
         scale: THREE.Vector3;
     };
     attackAnimation: 'interact-right' | 'attack-melee-right';
+    abilityAnimations: Record<string, string>;
 };
 
 export const WEAPON_CONFIG: Record<string, WeaponConfig> = {
@@ -22,14 +23,22 @@ export const WEAPON_CONFIG: Record<string, WeaponConfig> = {
             scale: new THREE.Vector3(2, 2, 1),
         },
         attackAnimation: 'interact-right',
+        abilityAnimations: {
+            fireball: 'interact-right',
+            arcaneMissile: 'interact-right',
+        },
     },
     Warrior: {
         component: Axe,
         transform: {
             position: new THREE.Vector3(-0.1, -0.1, 0.3),
-            rotation: new THREE.Euler(0, Math.PI / 1.5,0),
+            rotation: new THREE.Euler(0, Math.PI / 1.5, 0),
             scale: new THREE.Vector3(1.5, 1.5, 1.5),
         },
         attackAnimation: 'attack-melee-right',
+        abilityAnimations: {
+            groundSlam: 'attack-melee-right', 
+            battleShout: 'emote-yes', 
+        },
     },
 };

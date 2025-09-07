@@ -51,19 +51,19 @@ export const useRefStore = create<RefStore>((set) => ({
 }));
 
 interface ActionState {
-  actionTimestamps: Record<string, number>;
+  actions: Record<string, { timestamp: number; abilityId: string }>;
 }
 
 interface ActionMethods {
-  triggerCast: (playerId: string) => void;
+  triggerCast: (playerId: string, abilityId: string) => void;
 }
 
 export const useCharacterActionStore = create<ActionState & ActionMethods>((set) => ({
-  actionTimestamps: {},
-  triggerCast: (playerId) => set((state) => ({
-    actionTimestamps: {
-      ...state.actionTimestamps,
-      [playerId]: Date.now(),
+  actions: {},
+  triggerCast: (playerId, abilityId) => set((state) => ({
+    actions: {
+      ...state.actions,
+      [playerId]: { timestamp: Date.now(), abilityId: abilityId },
     }
   })),
 }));
@@ -71,25 +71,27 @@ export const useCharacterActionStore = create<ActionState & ActionMethods>((set)
 interface Effect {
   id: string;
   position: THREE.Vector3;
+  type: 'impact' | 'shockwave'; 
 }
 
 interface EffectState {
   effects: Effect[];
-  addEffect: (position: { x: number; y: number; z: number }) => void;
+  addEffect: (position: { x: number; y: number; z: number }, type?: Effect['type']) => void;
   removeEffect: (id: string) => void;
 }
 
 export const useEffectStore = create<EffectState>((set) => ({
   effects: [],
-  addEffect: (position) => {
+  addEffect: (position, type = 'impact') => {
     const id = THREE.MathUtils.generateUUID();
-    const newEffect = { id, position: new THREE.Vector3(position.x, position.y, position.z) };
+    const newEffect = { id, position: new THREE.Vector3(position.x, position.y, position.z), type };
     set((state) => ({ effects: [...state.effects, newEffect] }));
   },
   removeEffect: (id) => {
     set((state) => ({ effects: state.effects.filter((effect) => effect.id !== id) }));
   },
 }));
+
 
 export interface ActiveStatusEffect {
   effectId: string;
@@ -105,4 +107,34 @@ interface LoadingState {
 export const useLoadingStore = create<LoadingState>((set) => ({
   isSceneReady: false,
   setSceneReady: (isReady) => set({ isSceneReady: isReady }),
+}));
+
+interface AbilityState {
+  selectedAbilityId: string | null;
+  cooldowns: Map<string, number>;
+  selectAbility: (abilityId: string) => void;
+  startCooldown: (abilityId: string, durationSeconds: number) => void;
+  isAbilityOnCooldown: (abilityId: string) => boolean;
+}
+
+export const useAbilityStore = create<AbilityState>((set, get) => ({
+  selectedAbilityId: null,
+  cooldowns: new Map(),
+
+  selectAbility: (abilityId) => {
+    if (!get().isAbilityOnCooldown(abilityId)) {
+        set({ selectedAbilityId: abilityId });
+    }
+  },
+
+  startCooldown: (abilityId, durationSeconds) => {
+    const newCooldowns = new Map(get().cooldowns);
+    newCooldowns.set(abilityId, Date.now() + durationSeconds * 1000);
+    set({ cooldowns: newCooldowns });
+  },
+
+  isAbilityOnCooldown: (abilityId) => {
+    const endTime = get().cooldowns.get(abilityId);
+    return endTime ? Date.now() < endTime : false;
+  },
 }));

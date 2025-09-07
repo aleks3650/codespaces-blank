@@ -92,11 +92,37 @@ export class PhysicsWorld {
     return { type: "world", point: hitPoint };
   }
 
-
   public removePlayer(playerId: string) {
     this.playerControllers.get(playerId)?.cleanup();
     this.playerControllers.delete(playerId);
   }
+
+  public findPlayersInRadius(casterId: string, radius: number): string[] {
+    const casterController = this.playerControllers.get(casterId);
+    if (!casterController) return [];
+
+    const casterPosition = casterController.getBody().translation();
+    const hitPlayerIds: string[] = [];
+
+    for (const [targetId, targetController] of this.playerControllers.entries()) {
+      if (targetId === casterId) continue; 
+
+      const targetPosition = targetController.getBody().translation();
+
+      const distance = Math.sqrt(
+        Math.pow(casterPosition.x - targetPosition.x, 2) +
+        Math.pow(casterPosition.y - targetPosition.y, 2) +
+        Math.pow(casterPosition.z - targetPosition.z, 2)
+      );
+
+      if (distance <= radius) {
+        hitPlayerIds.push(targetId);
+      }
+    }
+
+    return hitPlayerIds;
+  }
+
 
   public update(inputs: Map<string, PlayerInput>, deltaTime: number) {
     for (const [playerId, controller] of this.playerControllers.entries()) {

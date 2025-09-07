@@ -1,6 +1,6 @@
 import { LivePlayerState, PlayerAction, PlayerInput, PlayerState, ActiveStatusEffect, PlayerClass, AnimationState } from "./helpers/types.ts";
 import { PhysicsWorld } from "./physics.ts";
-import { IActionCommand, CastSpellCommand } from "./commands/actionCommands.ts";
+import { IActionCommand, UseAbilityCommand } from "./commands/actionCommands.ts";
 import { statusEffectData } from './gameData/statusEffects.ts'
 import { GameEventManager } from "./gameEventManager.ts";
 import { GameEventType } from "./helpers/gameEvents.ts";
@@ -22,7 +22,7 @@ export class Game {
     this.eventManager = new GameEventManager();
 
     this.actionHandlers = new Map();
-    this.actionHandlers.set("castSpell", new CastSpellCommand());
+    this.actionHandlers.set("useAbility", new UseAbilityCommand());
   }
 
   public getPlayer(id: string): PlayerState | undefined {

@@ -16,6 +16,7 @@ import * as THREE from 'three';
 import { gl } from '../constants/constants';
 import { Suspense } from 'react';
 import { LoadingScreen } from './LoadingScreen';
+import ActionBar from '../components/ActionBar';
 
 export default function App({ selectedClass }: { selectedClass: string }) {
   useSocketConnect(selectedClass);
@@ -49,6 +50,7 @@ export default function App({ selectedClass }: { selectedClass: string }) {
         <>
           <Crosshair />
           <HUD />
+          <ActionBar />
         </>
       )}
       {localPlayer?.status === 'dead' && <DeathScreen />}

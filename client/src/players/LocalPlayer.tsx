@@ -8,7 +8,6 @@ import { useCharacterActionStore, useRefStore, useSocketStore } from '../state/S
 import { socket } from '../socket/socket';
 import { CharacterModel, type GLTFResult } from '../models/Character';
 import { WEAPON_CONFIG } from '../config/weaponConfig';
-// import { ColliderBox } from '../components/ColliderBox';
 
 type ActionName = GLTFResult['animations'][number]['name'];
 
@@ -23,7 +22,6 @@ const LocalPlayer = () => {
     const localPlayerState = useSocketStore(selectLocalPlayer);
     const playerRef = useRef<THREE.Group>(null!);
     const setPlayerRef = useRefStore((state) => state.setPlayerRef);
-
     const activeAction = useRef<ActionName>('idle');
 
     const { scene, animations } = useGLTF('/character.glb') as unknown as GLTFResult;
@@ -31,7 +29,7 @@ const LocalPlayer = () => {
     const { nodes, materials } = useGraph(clone) as unknown as GLTFResult;
     const { actions } = useAnimations(animations, playerRef);
 
-    const lastAttackTimestamp = useCharacterActionStore((state) => state.actionTimestamps[socket.id!]);
+    const lastAction = useCharacterActionStore((state) => state.actions[socket.id!]);
 
     useEffect(() => {
         setPlayerRef(playerRef);
@@ -40,26 +38,27 @@ const LocalPlayer = () => {
     }, [setPlayerRef, actions.idle]);
 
     useFrame(() => {
-        if (!localPlayerState || !localPlayerState.class || !actions) return;
+        if (!localPlayerState?.class || !actions) return;
 
         const { status, animationState } = localPlayerState;
-        const attackAnimationName = WEAPON_CONFIG[localPlayerState.class]?.attackAnimation as ActionName;
-        const attackAction = actions[attackAnimationName];
-
+        const config = WEAPON_CONFIG[localPlayerState.class];
         let targetAction: ActionName;
 
-        if (attackAction?.isRunning() && activeAction.current === attackAnimationName) {
-            targetAction = attackAnimationName;
+        if (lastAction && lastAction.timestamp > (playerRef.current as any)._lastProcessedAttack) {
+            const specificAnimation = config.abilityAnimations[lastAction.abilityId];
+            targetAction = (specificAnimation || config.attackAnimation) as ActionName;
+
+            (playerRef.current as any)._lastProcessedAttack = lastAction.timestamp;
         } else {
-            const serverState = status === 'dead' ? 'die' : animationState.toLowerCase();
-            targetAction = serverState as ActionName;
+            const currentAttackAnimation = actions[activeAction.current];
+            if (currentAttackAnimation?.isRunning() && activeAction.current.includes('attack')) {
+                targetAction = activeAction.current;
+            } else {
+                const serverState = status === 'dead' ? 'die' : animationState.toLowerCase();
+                targetAction = serverState as ActionName;
+            }
         }
         
-        if (lastAttackTimestamp > (playerRef.current as any)._lastProcessedAttack) {
-            targetAction = attackAnimationName;
-            (playerRef.current as any)._lastProcessedAttack = lastAttackTimestamp;
-        }
-
         if (activeAction.current !== targetAction) {
             const oldAction = actions[activeAction.current];
             const newAction = actions[targetAction];
@@ -72,7 +71,7 @@ const LocalPlayer = () => {
             oldAction?.fadeOut(0.2);
             newAction.reset().fadeIn(0.2).play();
 
-            if (targetAction === 'die' || targetAction === attackAnimationName) {
+            if (targetAction === 'die' || targetAction.includes('attack') || targetAction.includes('interact') || targetAction.includes('emote')) {
                 newAction.setLoop(THREE.LoopOnce, 1);
                 newAction.clampWhenFinished = true;
             } else {
@@ -93,9 +92,7 @@ const LocalPlayer = () => {
 
     useGLTF.preload('/character.glb');
 
-    if (!localPlayerState || !localPlayerState.class) {
-        return null;
-    }
+    if (!localPlayerState?.class) return null;
 
     return (
         <group ref={playerRef} dispose={null}>
@@ -107,7 +104,6 @@ const LocalPlayer = () => {
                     scale={0.1}
                 />
             </group>
-            {/* <ColliderBox length={.04} radius={.025} /> */}
         </group>
     );
 };

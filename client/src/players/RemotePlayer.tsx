@@ -7,7 +7,6 @@ import { SkeletonUtils } from 'three-stdlib';
 import { useCharacterActionStore, type PlayerState } from '../state/Store';
 import { CharacterModel, type GLTFResult } from '../models/Character';
 import { WEAPON_CONFIG } from '../config/weaponConfig';
-// import { ColliderBox } from '../components/ColliderBox';
 
 type ActionName = GLTFResult['animations'][number]['name'];
 
@@ -21,7 +20,6 @@ type RemotePlayerProps = PlayerState & {
 
 const RemotePlayer = ({ id, position, rotation, status, animationState, class: characterClass }: RemotePlayerProps) => {
     const groupRef = useRef<THREE.Group>(null!);
-
     const activeAction = useRef<ActionName>('idle');
 
     const { scene, animations } = useGLTF('/character.glb') as unknown as GLTFResult;
@@ -29,26 +27,26 @@ const RemotePlayer = ({ id, position, rotation, status, animationState, class: c
     const { nodes, materials } = useGraph(clone) as unknown as GLTFResult;
     const { actions } = useAnimations(animations, groupRef);
 
-    const lastAttackTimestamp = useCharacterActionStore((state) => state.actionTimestamps[id]);
+    const lastAction = useCharacterActionStore((state) => state.actions[id]);
 
     useFrame(() => {
         if (!characterClass || !actions) return;
 
-        const attackAnimationName = WEAPON_CONFIG[characterClass]?.attackAnimation as ActionName;
-        const attackAction = actions[attackAnimationName];
-
+        const config = WEAPON_CONFIG[characterClass];
         let targetAction: ActionName;
 
-        if (attackAction?.isRunning() && activeAction.current === attackAnimationName) {
-            targetAction = attackAnimationName;
+        if (lastAction && lastAction.timestamp > (groupRef.current as any)._lastProcessedAttack) {
+            const specificAnimation = config.abilityAnimations[lastAction.abilityId];
+            targetAction = (specificAnimation || config.attackAnimation) as ActionName;
+            (groupRef.current as any)._lastProcessedAttack = lastAction.timestamp;
         } else {
-            const serverState = status === 'dead' ? 'die' : animationState.toLowerCase();
-            targetAction = serverState as ActionName;
-        }
-
-        if (lastAttackTimestamp > (groupRef.current as any)._lastProcessedAttack) {
-            targetAction = attackAnimationName;
-            (groupRef.current as any)._lastProcessedAttack = lastAttackTimestamp;
+            const currentAttackAnimation = actions[activeAction.current];
+            if (currentAttackAnimation?.isRunning() && activeAction.current.includes('attack')) {
+                targetAction = activeAction.current;
+            } else {
+                const serverState = status === 'dead' ? 'die' : animationState.toLowerCase();
+                targetAction = serverState as ActionName;
+            }
         }
 
         if (activeAction.current !== targetAction) {
@@ -60,13 +58,12 @@ const RemotePlayer = ({ id, position, rotation, status, animationState, class: c
             oldAction?.fadeOut(0.2);
             newAction.reset().fadeIn(0.2).play();
 
-            if (targetAction === 'die' || targetAction === attackAnimationName) {
+            if (targetAction === 'die' || targetAction.includes('attack') || targetAction.includes('interact') || targetAction.includes('emote')) {
                 newAction.setLoop(THREE.LoopOnce, 1);
                 newAction.clampWhenFinished = true;
             } else {
                 newAction.setLoop(THREE.LoopRepeat, Infinity);
             }
-
             activeAction.current = targetAction;
         }
 
@@ -82,13 +79,11 @@ const RemotePlayer = ({ id, position, rotation, status, animationState, class: c
         if (groupRef.current) {
             (groupRef.current as any)._lastProcessedAttack = 0;
         }
-    }, [])
+    }, []);
 
     useGLTF.preload('/character.glb');
 
-    if (!characterClass) {
-        return null;
-    }
+    if (!characterClass) return null;
 
     return (
         <group ref={groupRef} dispose={null}>
@@ -100,7 +95,6 @@ const RemotePlayer = ({ id, position, rotation, status, animationState, class: c
                     scale={0.1}
                 />
             </group>
-                {/* <ColliderBox length={.04} radius={.025} /> */}
         </group>
     );
 };

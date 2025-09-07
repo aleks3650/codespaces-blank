@@ -1,15 +1,4 @@
-export const classData = new Map<string, { baseHealth: number; baseMana: number; abilities: string[] }>([
-  ["Mage", { 
-    baseHealth: 100, 
-    baseMana: 150, 
-    abilities: ["fireball", "arcaneMissile"] 
-  }],
-  ["Warrior", { 
-    baseHealth: 150, 
-    baseMana: 50,
-    abilities: ["groundSlam", "battleShout"]
-  }],
-]);
+export type AbilityType = 'projectile' | 'melee' | 'self_buff';
 
 export interface BaseAbilityDefinition {
   id: string;
@@ -61,18 +50,6 @@ export const abilityData = new Map<string, AbilityDefinition>([
     },
   ],
   [
-    "arcaneMissile",
-    {
-      id: "arcaneMissile",
-      name: "Magiczny Pocisk",
-      type: 'projectile',
-      manaCost: 5,
-      damage: 8,
-      cooldown: 0.5,
-      range: 80.0,
-    },
-  ],
-  [
     "groundSlam", 
     {
       id: "groundSlam",
@@ -81,7 +58,7 @@ export const abilityData = new Map<string, AbilityDefinition>([
       manaCost: 20,
       damage: 15,
       cooldown: 8,
-      radius: 1.0 
+      radius: 3.0 
     }
   ],
   [
@@ -96,5 +73,4 @@ export const abilityData = new Map<string, AbilityDefinition>([
     }
   ]
 ]);
-
 

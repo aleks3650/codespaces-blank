@@ -7,9 +7,11 @@ import { EffectsManager } from "../components/effects/EffectsManager";
 import { FloatingTextManager } from "../components/effects/FloatingTextManager";
 // import { Effects } from "../components/Effects";
 import { SceneReadySignal } from "../components/SceneReadySignal";
+import { useAbilitySelection } from "../hooks/useAbilitySelection";
 
 const Game = () => {
-
+    useAbilitySelection();
+    
     return (
         <InputControlsProvider>
             <EnvironmentItem />

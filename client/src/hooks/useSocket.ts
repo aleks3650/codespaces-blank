@@ -12,7 +12,7 @@ export function useSocketConnect(selectedClass: string) {
   const setGameState = useSocketStore((state) => state.setGameState);
   const addEffect = useEffectStore((state) => state.addEffect);
   const addFloatingText = useFloatingTextStore((state) => state.addText);
-  const addNotification = useNotificationStore((state) => state.addNotification); 
+  const addNotification = useNotificationStore((state) => state.addNotification);
   const triggerCast = useCharacterActionStore((state) => state.triggerCast);
 
 
@@ -50,7 +50,14 @@ export function useSocketConnect(selectedClass: string) {
             showDamageNumber(event.payload);
             break;
           case 'player-cast-spell':
-            triggerCast(event.payload.casterId);
+            triggerCast(event.payload.casterId, event.payload.spellId);
+            if (event.payload.spellId === 'groundSlam') {
+              const caster = useSocketStore.getState().players[event.payload.casterId];
+              if (caster) {
+                addEffect(caster.position, 'shockwave');
+              }
+            }
+            break;
             break;
 
           case 'spell-on-cooldown':

@@ -29,14 +29,14 @@ export interface PlayerState {
   animationState: AnimationState
 }
 
-export interface CastSpellPayload {
-  spellId: string;
-  direction: [number, number, number, number];
+export interface UseAbilityPayload {
+  abilityId: string;
+  direction: [number, number, number, number]; 
 }
 
 export interface PlayerAction {
-  actionType: "castSpell";
-  payload: CastSpellPayload;
+  actionType: "useAbility";
+  payload: UseAbilityPayload;
 }
 
 export type RaycastHitResult =
