@@ -5,6 +5,7 @@ import { statusEffectData } from './gameData/statusEffects.ts'
 import { GameEventManager } from "./gameEventManager.ts";
 import { GameEventType } from "./helpers/gameEvents.ts";
 import { classData } from "./gameData/classes.ts";
+import { ResetPlayerCommand } from "./commands/resetPlayerCommand.ts";
 
 const RESPAWN_TIME_MS = 5000;
 const SPAWN_POINT = { x: 1, y: 1.5, z: 0.0 };
@@ -23,6 +24,7 @@ export class Game {
 
     this.actionHandlers = new Map();
     this.actionHandlers.set("useAbility", new UseAbilityCommand());
+    this.actionHandlers.set("resetPlayer", new ResetPlayerCommand());
   }
 
   public getPlayer(id: string): PlayerState | undefined {
@@ -130,7 +132,7 @@ export class Game {
     for (const player of this.players.values()) {
       if (player.status === 'dead') {
         if (player.respawnAt && Date.now() >= player.respawnAt) {
-          this._respawnPlayer(player);
+          this.resetPlayer(player.id);
         }
       } else {
         this._processStatusEffects(player, deltaTime);
@@ -166,14 +168,19 @@ export class Game {
     this.eventManager.dispatchEvents()
   }
 
-  private _respawnPlayer(player: PlayerState) {
-    const data = classData.get(player.class)
+  public resetPlayer(playerId: string) {
+    const player = this.players.get(playerId);
+    if (!player) return;
+
+    const data = classData.get(player.class)!;
     player.status = 'alive';
     player.health = data.baseHealth;
     player.mana = data.baseMana;
     player.respawnAt = null;
+    player.activeStatusEffects = [];
+    player.spellCooldowns.clear();
+
     this.physics.teleportPlayer(player.id, SPAWN_POINT);
-    console.log(`Player ${player.id} has respawned.`);
 
     this.eventManager.queueEvent(GameEventType.PlayerRespawn, {
       playerId: player.id,

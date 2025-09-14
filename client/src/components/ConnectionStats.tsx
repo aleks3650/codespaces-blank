@@ -30,7 +30,7 @@ const ConnectionStats = () => {
             }}
         >
             {isConnected && <h1 style={{ fontSize: "14px" }}>
-                Class: {data.class}
+                Class: {data?.class}
             </h1>}
             {data?.class && (
                 <h2 style={{ fontSize: "10px" }}>ID: {socketId}</h2>

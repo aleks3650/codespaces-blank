@@ -13,6 +13,9 @@ export interface PlayerInput {
   };
 }
 
+// deno-lint-ignore no-empty-interface
+export interface ResetPlayerPayload {}
+
 export type PlayerClass = "Mage" | "Warrior";
 
 export interface PlayerState {
@@ -23,6 +26,7 @@ export interface PlayerState {
   spellCooldowns: Map<string, number>;
   status: "alive" | "dead";
   respawnAt: number | null;
+  resetCooldownEndsAt?: number;
   activeStatusEffects: ActiveStatusEffect[];
   accumulatedDotDamage?: number;
   lastDotFlushTime?: number;
@@ -31,12 +35,12 @@ export interface PlayerState {
 
 export interface UseAbilityPayload {
   abilityId: string;
-  direction: [number, number, number, number]; 
+  direction: [number, number, number, number];
 }
 
 export interface PlayerAction {
-  actionType: "useAbility";
-  payload: UseAbilityPayload;
+  actionType: "useAbility" | "resetPlayer";
+  payload: UseAbilityPayload | ResetPlayerPayload;
 }
 
 export type RaycastHitResult =

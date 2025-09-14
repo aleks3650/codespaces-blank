@@ -6,7 +6,6 @@ import { socket } from '../socket/socket';
 import { useInputContext } from '../context/InputContext';
 import { useCharacterActionStore, useRefStore, useSocketStore } from '../state/Store';
 
-// NOWE IMPORTY: Dostęp do stanu umiejętności i ich definicji
 import { useAbilityStore } from '../state/Store';
 import { abilityData } from '../constants/classes';
 import { useNotificationStore } from '../state/NotificationStore';
@@ -31,7 +30,6 @@ export const PlayerControls = () => {
     const environmentRef = useRefStore((state) => state.environmentRef);
     const triggerCast = useCharacterActionStore((state) => state.triggerCast);
 
-    // NOWY HOOK: Pobieramy stan i akcje z naszego nowego `useAbilityStore`
     const { selectedAbilityId, isAbilityOnCooldown, startCooldown } = useAbilityStore();
 
         const addNotification = useNotificationStore((state) => state.addNotification);
@@ -43,28 +41,23 @@ export const PlayerControls = () => {
                 return;
             }
 
-            // 1. Sprawdź, czy jakakolwiek umiejętność jest aktualnie wybrana
             if (!selectedAbilityId) {
                 console.warn("No ability selected to use.");
                 return;
             }
 
-            // 2. Sprawdź, czy wybrana umiejętność nie jest na cooldownie
             if (isAbilityOnCooldown(selectedAbilityId)) {
-                // W przyszłości można tu dodać czerwoną notyfikację "Not ready!"
                 console.log(`Ability ${selectedAbilityId} is on cooldown.`);
                 addNotification(`${selectedAbilityId} is not ready!`, 'error')
                 return;
             }
 
-            // 3. Pobierz definicję umiejętności, aby poznać jej dane (np. czas trwania cooldownu)
             const abilityDef = abilityData.get(selectedAbilityId);
             if (!abilityDef) {
                 console.error(`Ability definition for ${selectedAbilityId} not found on client.`);
                 return;
             }
 
-            // 4. Logika celowania (Raycasting) - pozostaje bez zmian
             raycaster.setFromCamera(screenCenter, camera);
             const sceneObjects = environmentRef?.current?.children ?? [];
             const intersects = raycaster.intersectObjects(sceneObjects, true);
@@ -82,19 +75,16 @@ export const PlayerControls = () => {
 
             const correctedDirection = targetPoint.sub(spellOrigin).normalize();
 
-            // 5. Wyślij akcję na serwer, używając ID aktualnie wybranej umiejętności
             socket.emit("player-action", {
-                actionType: "useAbility", // Używamy poprawnej, uniwersalnej nazwy akcji
+                actionType: "useAbility", 
                 payload: {
-                    abilityId: selectedAbilityId, // Przekazujemy ID ze stanu, a nie zahardkodowaną wartość
+                    abilityId: selectedAbilityId, 
                     direction: [correctedDirection.x, correctedDirection.y, correctedDirection.z],
                 }
             });
 
-            // 6. Natychmiast rozpocznij cooldown na kliencie, aby UI zareagowało od razu
             startCooldown(selectedAbilityId, abilityDef.cooldown);
 
-            // 7. Uruchom animację ataku
             triggerCast(socket.id!, selectedAbilityId);
         };
 

@@ -12,6 +12,7 @@ export enum GameEventType {
 
   PlayerRespawn = 'player-respawn',
   PlayerCastSpell = 'player-cast-spell',
+  ActionOnCooldown = 'action-on-cooldown',
 }
 
 export interface GameEventPayloads {
@@ -63,6 +64,10 @@ export interface GameEventPayloads {
     position: { x: number; y: number; z: number };
     newHealth: number;
     newMana: number;
+  };
+  [GameEventType.ActionOnCooldown]: {
+    actionType: string;
+    remainingMs: number;
   };
 }
 

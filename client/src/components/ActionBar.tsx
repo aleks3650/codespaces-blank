@@ -1,4 +1,4 @@
-import { classData } from '../constants/classes';
+import { abilityData, classData } from '../constants/classes';
 import { socket } from '../socket/socket';
 import { useAbilityStore } from '../state/Store';
 import { useSocketStore } from '../state/Store';
@@ -15,6 +15,10 @@ const ActionBar = () => {
     if (!localPlayer?.class) {
         return null;
     }
+
+    // const ability = abilityData.get(selectedAbilityId);
+    // console.log(ability)
+
     const playerAbilities = classData.get(localPlayer.class)?.abilities ?? [];
 
     const selectedAbility = playerAbilities.find(ability => ability === selectedAbilityId)

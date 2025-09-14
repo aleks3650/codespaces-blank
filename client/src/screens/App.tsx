@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { View, Stats } from '@react-three/drei';
+import { View, Stats, Preload } from '@react-three/drei';
 import '../index.css'; 
 import Game from './Game';
 import MiniMap from './MiniMap'; 
@@ -17,6 +17,10 @@ import { gl } from '../constants/constants';
 import { Suspense } from 'react';
 import { LoadingScreen } from './LoadingScreen';
 import ActionBar from '../components/ActionBar';
+import { useResetAction } from '../hooks/useResetAction';
+
+// import {Perf} from 'r3f-perf'
+// import {useDetectGPU} from '@react-three/drei';
 
 export default function App({ selectedClass }: { selectedClass: string }) {
   useSocketConnect(selectedClass);
@@ -25,6 +29,8 @@ export default function App({ selectedClass }: { selectedClass: string }) {
 
   const mainViewRef = useRef(null!);
   const minimapViewRef = useRef(null!);
+
+  useResetAction()
 
   return (
     <div ref={mainViewRef} className="container">
@@ -42,6 +48,7 @@ export default function App({ selectedClass }: { selectedClass: string }) {
           <View index={2} track={minimapViewRef}>
             <MiniMap />
           </View>
+          <Preload all />
         </Suspense>
         <View.Port />
       </Canvas>

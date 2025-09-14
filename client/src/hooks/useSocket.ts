@@ -58,6 +58,12 @@ export function useSocketConnect(selectedClass: string) {
               }
             }
             break;
+
+          case 'action-on-cooldown':
+            if (event.payload.actionType === 'resetPlayer') {
+              const seconds = Math.ceil(event.payload.remainingMs / 1000);
+              addNotification(`Reset is on cooldown (${seconds}s left)`, 'error');
+            }
             break;
 
           case 'spell-on-cooldown':

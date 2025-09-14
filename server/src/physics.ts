@@ -44,7 +44,7 @@ export class PhysicsWorld {
   public teleportPlayer(playerId: string, position: { x: number; y: number; z: number }) {
     const controller = this.playerControllers.get(playerId);
     if (controller) {
-      controller.teleport(position);
+      controller.forceTeleport(position);
     }
   }
 
