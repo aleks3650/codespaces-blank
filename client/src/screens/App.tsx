@@ -1,9 +1,9 @@
 import { useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { View, Stats, Preload } from '@react-three/drei';
-import '../index.css'; 
+import '../index.css';
 import Game from './Game';
-import MiniMap from './MiniMap'; 
+import MiniMap from './MiniMap';
 import { useSocketConnect } from '../hooks/useSocket';
 import { Crosshair } from '../components/UI/Crosshair';
 import { HUD } from '../components/UI/HUD';
@@ -18,6 +18,7 @@ import { Suspense } from 'react';
 import { LoadingScreen } from './LoadingScreen';
 import ActionBar from '../components/ActionBar';
 import { useResetAction } from '../hooks/useResetAction';
+import { InventoryBar } from '../components/UI/InventoryBar';
 
 // import {Perf} from 'r3f-perf'
 // import {useDetectGPU} from '@react-three/drei';
@@ -52,12 +53,15 @@ export default function App({ selectedClass }: { selectedClass: string }) {
         </Suspense>
         <View.Port />
       </Canvas>
-      
+
       {isSceneReady && localPlayer?.status === 'alive' && (
         <>
           <Crosshair />
           <HUD />
-          <ActionBar />
+          <div className="main-action-container">
+            <ActionBar />
+            <InventoryBar />
+          </div>
         </>
       )}
       {localPlayer?.status === 'dead' && <DeathScreen />}

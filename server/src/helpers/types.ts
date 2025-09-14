@@ -12,11 +12,19 @@ export interface PlayerInput {
     sprint: boolean;
   };
 }
+interface InventorySlot {
+  itemId: string;
+  quantity: number;
+}
 
 // deno-lint-ignore no-empty-interface
-export interface ResetPlayerPayload {}
+export interface ResetPlayerPayload { }
 
 export type PlayerClass = "Mage" | "Warrior";
+
+export interface UseItemPayload {
+    inventorySlot: number; 
+}
 
 export interface PlayerState {
   id: string;
@@ -26,6 +34,8 @@ export interface PlayerState {
   spellCooldowns: Map<string, number>;
   status: "alive" | "dead";
   respawnAt: number | null;
+  inventory: InventorySlot[];
+  consumableCooldownEndsAt?: number;
   resetCooldownEndsAt?: number;
   activeStatusEffects: ActiveStatusEffect[];
   accumulatedDotDamage?: number;
@@ -39,8 +49,8 @@ export interface UseAbilityPayload {
 }
 
 export interface PlayerAction {
-  actionType: "useAbility" | "resetPlayer";
-  payload: UseAbilityPayload | ResetPlayerPayload;
+  actionType: "useAbility" | "resetPlayer" | "useItem";
+  payload: UseAbilityPayload | ResetPlayerPayload | UseItemPayload;
 }
 
 export type RaycastHitResult =
@@ -56,7 +66,8 @@ export interface LivePlayerState {
   class: PlayerClass;
   status: "alive" | "dead";
   respawnAt: number | null;
-  animationState: AnimationState
+  animationState: AnimationState;
+  inventory: InventorySlot[];
 }
 
 export interface ActiveStatusEffect {

@@ -6,6 +6,7 @@ import { GameEventManager } from "./gameEventManager.ts";
 import { GameEventType } from "./helpers/gameEvents.ts";
 import { classData } from "./gameData/classes.ts";
 import { ResetPlayerCommand } from "./commands/resetPlayerCommand.ts";
+import {UseItemCommand} from './commands/useItemCommand.ts' 
 
 const RESPAWN_TIME_MS = 5000;
 const SPAWN_POINT = { x: 1, y: 1.5, z: 0.0 };
@@ -25,6 +26,7 @@ export class Game {
     this.actionHandlers = new Map();
     this.actionHandlers.set("useAbility", new UseAbilityCommand());
     this.actionHandlers.set("resetPlayer", new ResetPlayerCommand());
+    this.actionHandlers.set("useItem", new UseItemCommand());
   }
 
   public getPlayer(id: string): PlayerState | undefined {
@@ -43,7 +45,11 @@ export class Game {
       status: "alive",
       respawnAt: null,
       activeStatusEffects: [],
-      animationState: "idle"
+      animationState: "idle",
+      inventory: [
+        { itemId: 'cheese', quantity: 5 },
+        { itemId: 'mana_potion', quantity: 3 },
+      ],
     };
     this.players.set(id, newPlayer);
     this.physics.addPlayer(id);
@@ -203,6 +209,22 @@ export class Game {
     return Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals);
   }
 
+  public applyHeal(targetId: string, amount: number) {
+    const targetPlayer = this.players.get(targetId);
+    if (!targetPlayer || targetPlayer.status === 'dead') return;
+
+    const { baseHealth } = classData.get(targetPlayer.class)!;
+    targetPlayer.health = Math.min(baseHealth, targetPlayer.health + amount);
+  }
+
+  public applyManaRestore(targetId: string, amount: number) {
+    const targetPlayer = this.players.get(targetId);
+    if (!targetPlayer || targetPlayer.status === 'dead') return;
+
+    const { baseMana } = classData.get(targetPlayer.class)!;
+    targetPlayer.mana = Math.min(baseMana, targetPlayer.mana + amount);
+  }
+
   private _processStatusEffects(player: PlayerState, deltaTime: number) {
     player.activeStatusEffects = player.activeStatusEffects.filter(
       (effect) => effect.expiresAt > Date.now()
@@ -255,7 +277,8 @@ export class Game {
           class: logicalState.class,
           status: logicalState.status,
           respawnAt: logicalState.respawnAt,
-          animationState: logicalState.animationState
+          animationState: logicalState.animationState,
+          inventory: logicalState.inventory,
         };
       }
     }

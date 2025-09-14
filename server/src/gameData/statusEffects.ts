@@ -18,5 +18,9 @@ export const statusEffectData = new Map<string, StatusEffectDefinition>([
     duration: 10,
     // statModifiers: { damageMultiplier: 1.2 }
   }],
+  ["well_fed", {
+    id: "well_fed",
+    duration: 30, 
+  }],
 ]);
 

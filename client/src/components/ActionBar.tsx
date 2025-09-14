@@ -1,7 +1,6 @@
-import { abilityData, classData } from '../constants/classes';
+import { classData } from '../constants/classes';
 import { socket } from '../socket/socket';
-import { useAbilityStore } from '../state/Store';
-import { useSocketStore } from '../state/Store';
+import { useActionStore, useSocketStore } from '../state/Store'; // Zmieniony import
 import { AbilityIcon } from './AbilityIcon';
 
 const selectLocalPlayer = (state: ReturnType<typeof useSocketStore.getState>) => {
@@ -10,29 +9,33 @@ const selectLocalPlayer = (state: ReturnType<typeof useSocketStore.getState>) =>
 
 const ActionBar = () => {
     const localPlayer = useSocketStore(selectLocalPlayer);
-    const { selectedAbilityId } = useAbilityStore();
+    
+    // Pobieramy wybraną akcję z nowego store'a
+    const { selectedAction } = useActionStore();
 
     if (!localPlayer?.class) {
         return null;
     }
 
-    // const ability = abilityData.get(selectedAbilityId);
-    // console.log(ability)
-
     const playerAbilities = classData.get(localPlayer.class)?.abilities ?? [];
 
-    const selectedAbility = playerAbilities.find(ability => ability === selectedAbilityId)
+    // Wyświetlamy nazwę wybranej akcji, jeśli jest to umiejętność
+    const selectedAbilityName = 
+        selectedAction?.type === 'ability' 
+        ? selectedAction.id 
+        : ''; // Można dodać nazwę przedmiotu, jeśli jest wybrany
 
     return (
         <>
-            <h1 className='choosed-ability'>{selectedAbility}</h1>
+            {/* Wyświetla nazwę aktualnie wybranej umiejętności */}
+            <h1 className='choosed-ability'>{selectedAbilityName}</h1>
+            
             <div className="action-bar-container">
                 {playerAbilities.map((abilityId, index) => (
                     <AbilityIcon
                         key={abilityId}
                         abilityId={abilityId}
                         hotkey={index + 1}
-                        isSelected={abilityId === selectedAbilityId}
                     />
                 ))}
             </div>
