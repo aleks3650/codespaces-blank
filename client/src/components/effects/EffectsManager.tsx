@@ -1,5 +1,3 @@
-// src/components/effects/EffectsManager.tsx
-
 import { useEffectStore } from '../../state/Store';
 import { SpellImpactEffect } from './SpellImpactEffect';
 import { ShockwaveEffect } from './ShockwaveEffect'; 

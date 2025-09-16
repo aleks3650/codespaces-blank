@@ -64,33 +64,18 @@ export class UseAbilityCommand implements IActionCommand<UseAbilityPayload> {
             case 'projectile': {
                 const result = game.physics.castRayForSpell(playerId, payload.direction, ability.range);
 
-                switch (result.type) {
-                    case "player":
-                        game.applyDamage(result.playerId, ability.damage, playerId);
-                        if (ability.appliesEffectId) {
-                            game.applyStatusEffect(result.playerId, ability.appliesEffectId, playerId);
-                        }
-                        game.eventManager.queueEvent(GameEventType.SpellImpactPlayer, {
-                            spellId: ability.id,
-                            casterId: playerId,
-                            hitPlayerId: result.playerId,
-                            hitPoint: result.point,
-                        });
-                        break;
-                    case "world":
-                        game.eventManager.queueEvent(GameEventType.SpellImpactWorld, {
-                            spellId: ability.id,
-                            casterId: playerId,
-                            hitPoint: result.point,
-                        });
-                        break;
-                    case "miss":
-                        game.eventManager.queueEvent(
-                            GameEventType.SpellCastFailed,
-                            { reason: 'missed' },
-                            playerId
-                        );
-                        break;
+                if (result.type !== 'miss') {
+                    game.eventManager.queueEvent(GameEventType.AreaEffectTriggered, {
+                        effectId: 'spellImpact', 
+                        position: result.point,
+                    });
+                }
+                
+                if (result.type === 'player') {
+                    game.applyDamage(result.playerId, ability.damage, playerId);
+                    if (ability.appliesEffectId) {
+                        game.applyStatusEffect(result.playerId, ability.appliesEffectId, playerId);
+                    }
                 }
                 break;
             }
@@ -102,9 +87,17 @@ export class UseAbilityCommand implements IActionCommand<UseAbilityPayload> {
                         game.applyStatusEffect(hitPlayerId, ability.appliesEffectId, playerId);
                     }
                 }
+
+                const casterController = game.physics.getPlayerController(playerId);
+                if (casterController) {
+                    const casterPosition = casterController.getState().position;
+                    game.eventManager.queueEvent(GameEventType.AreaEffectTriggered, {
+                        effectId: ability.id,
+                        position: casterPosition,
+                    });
+                }
                 break;
             }
-
             case 'self_buff': {
                 game.applyStatusEffect(playerId, ability.appliesEffectId, playerId);
                 break;

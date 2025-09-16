@@ -3,20 +3,14 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useGraph } from '@react-three/fiber';
 import { useGLTF, useAnimations } from '@react-three/drei';
 import { SkeletonUtils } from 'three-stdlib';
-
 import { useCharacterActionStore, type PlayerState } from '../state/Store';
-import { CharacterModel, type GLTFResult } from '../models/Character';
+import { CharacterModel, type GLTFResult, type ActionName } from '../models/Character';
 import { WEAPON_CONFIG } from '../config/weaponConfig';
-
-type ActionName = GLTFResult['animations'][number]['name'];
-
+import { useCharacterAnimations } from '../hooks/useCharacterAnimations'; 
 const targetPosition = new THREE.Vector3();
 const targetQuaternion = new THREE.Quaternion();
 const LERP_FACTOR = 0.2;
-
-type RemotePlayerProps = PlayerState & {
-    id: string;
-};
+type RemotePlayerProps = PlayerState & { id: string };
 
 const RemotePlayer = ({ id, position, rotation, status, animationState, class: characterClass }: RemotePlayerProps) => {
     const groupRef = useRef<THREE.Group>(null!);
@@ -29,60 +23,32 @@ const RemotePlayer = ({ id, position, rotation, status, animationState, class: c
 
     const lastAction = useCharacterActionStore((state) => state.actions[id]);
 
+    useEffect(() => {
+        actions.idle?.play();
+        if (groupRef.current) {
+            (groupRef.current as any)._lastProcessedAction = 0;
+        }
+    }, [actions.idle]);
+
     useFrame(() => {
-        if (!characterClass || !actions) return;
+        if (!characterClass || !actions || !position || !rotation) return;
+        useCharacterAnimations({
+            actions,
+            activeAction,
+            playerRef: groupRef,
+            lastAction,
+            config: WEAPON_CONFIG[characterClass],
+            status,
+            animationState,
+        });
 
-        const config = WEAPON_CONFIG[characterClass];
-        let targetAction: ActionName;
-
-        if (lastAction && lastAction.timestamp > (groupRef.current as any)._lastProcessedAttack) {
-            const specificAnimation = config.abilityAnimations[lastAction.abilityId];
-            targetAction = (specificAnimation || config.attackAnimation) as ActionName;
-            (groupRef.current as any)._lastProcessedAttack = lastAction.timestamp;
-        } else {
-            const currentAttackAnimation = actions[activeAction.current];
-            if (currentAttackAnimation?.isRunning() && activeAction.current.includes('attack')) {
-                targetAction = activeAction.current;
-            } else {
-                const serverState = status === 'dead' ? 'die' : animationState.toLowerCase();
-                targetAction = serverState as ActionName;
-            }
-        }
-
-        if (activeAction.current !== targetAction) {
-            const oldAction = actions[activeAction.current];
-            const newAction = actions[targetAction];
-
-            if (!newAction) return;
-
-            oldAction?.fadeOut(0.2);
-            newAction.reset().fadeIn(0.2).play();
-
-            if (targetAction === 'die' || targetAction.includes('attack') || targetAction.includes('interact') || targetAction.includes('emote')) {
-                newAction.setLoop(THREE.LoopOnce, 1);
-                newAction.clampWhenFinished = true;
-            } else {
-                newAction.setLoop(THREE.LoopRepeat, Infinity);
-            }
-            activeAction.current = targetAction;
-        }
-
-        if (position && rotation) {
-            targetPosition.set(position.x, position.y, position.z);
-            targetQuaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
-            groupRef.current.position.lerp(targetPosition, LERP_FACTOR);
-            groupRef.current.quaternion.slerp(targetQuaternion, LERP_FACTOR);
-        }
+        targetPosition.set(position.x, position.y, position.z);
+        targetQuaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
+        groupRef.current.position.lerp(targetPosition, LERP_FACTOR);
+        groupRef.current.quaternion.slerp(targetQuaternion, LERP_FACTOR);
     });
 
-    useEffect(() => {
-        if (groupRef.current) {
-            (groupRef.current as any)._lastProcessedAttack = 0;
-        }
-    }, []);
-
     useGLTF.preload('/character.glb');
-
     if (!characterClass) return null;
 
     return (

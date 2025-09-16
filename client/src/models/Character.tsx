@@ -3,7 +3,7 @@ import React, { useRef, useLayoutEffect } from 'react';
 import type { GLTF } from 'three-stdlib';
 import { WEAPON_CONFIG } from '../config/weaponConfig';
 
-type ActionName = 'static' | 'idle' | 'walk' | 'sprint' | 'jump' | 'fall' | 'crouch' | 'sit' | 'drive' | 'die' | 'pick-up' | 'emote-yes' | 'emote-no' | 'holding-right' | 'holding-left' | 'holding-both' | 'holding-right-shoot' | 'holding-left-shoot' | 'holding-both-shoot' | 'attack-melee-right' | 'attack-melee-left' | 'attack-kick-right' | 'attack-kick-left' | 'interact-right' | 'interact-left' | 'wheelchair-sit' | 'wheelchair-look-left' | 'wheelchair-look-right' | 'wheelchair-move-forward' | 'wheelchair-move-back' | 'wheelchair-move-left' | 'wheelchair-move-right';
+export type ActionName = 'static' | 'idle' | 'walk' | 'sprint' | 'jump' | 'fall' | 'crouch' | 'sit' | 'drive' | 'die' | 'pick-up' | 'emote-yes' | 'emote-no' | 'holding-right' | 'holding-left' | 'holding-both' | 'holding-right-shoot' | 'holding-left-shoot' | 'holding-both-shoot' | 'attack-melee-right' | 'attack-melee-left' | 'attack-kick-right' | 'attack-kick-left' | 'interact-right' | 'interact-left' | 'wheelchair-sit' | 'wheelchair-look-left' | 'wheelchair-look-right' | 'wheelchair-move-forward' | 'wheelchair-move-back' | 'wheelchair-move-left' | 'wheelchair-move-right';
 
 interface GLTFAction extends THREE.AnimationClip {
   name: ActionName;
@@ -20,6 +20,8 @@ export type GLTFResult = GLTF & {
   };
   animations: GLTFAction[];
 };
+
+export type AnimationStore = Record<ActionName, THREE.AnimationAction | null>;
 
 type CharacterModelProps = React.JSX.IntrinsicElements['group'] & {
   nodes: GLTFResult['nodes'];

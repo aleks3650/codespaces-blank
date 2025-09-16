@@ -8,7 +8,6 @@ export const useActionHotkeys = () => {
     const { selectAction } = useActionStore(); 
     const inventory = useSocketStore((state) => state.players[socket.id!]?.inventory ?? []);
 
-    // Ustawienie domyślnej akcji (pierwsza umiejętność)
     useEffect(() => {
         if (localPlayer?.class) {
             const playerAbilities = classData.get(localPlayer.class)?.abilities;
@@ -22,22 +21,19 @@ export const useActionHotkeys = () => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.repeat || !localPlayer?.class) return;
 
-            // Klawisze 1-4: Wybór umiejętności
             const playerAbilities = classData.get(localPlayer.class)?.abilities ?? [];
             let abilityIndex = -1;
             if (e.code === 'Digit1') abilityIndex = 0;
             if (e.code === 'Digit2') abilityIndex = 1;
-            // ... itd.
             if (abilityIndex !== -1 && playerAbilities[abilityIndex]) {
                 selectAction({ type: 'ability', id: playerAbilities[abilityIndex] });
                 return;
             }
 
-            // Klawisze 5-8: Wybór przedmiotu
             let itemSlotIndex = -1;
             if (e.code === 'Digit5') itemSlotIndex = 0;
             if (e.code === 'Digit6') itemSlotIndex = 1;
-            // ... itd.
+
             if (itemSlotIndex !== -1 && inventory[itemSlotIndex]) {
                 selectAction({ 
                     type: 'item', 

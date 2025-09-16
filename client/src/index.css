@@ -347,19 +347,17 @@ button:focus-visible {
 
 .main-action-container {
   position: absolute;
-  bottom: 20px; /* Odległość od dołu ekranu */
+  bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
 
-  display: flex; /* Układa paski OBOK SIEBIE */
+  display: flex;
   align-items: center;
-  gap: 20px; /* Odstęp MIĘDZY paskiem umiejętności a przedmiotów */
-  
+  gap: 20px;
   z-index: 10;
-  pointer-events: none; /* Sam kontener nie jest klikalny */
+  pointer-events: none;
 }
 
-/* Uproszczone style dla PASKÓW. Nie mają już własnego pozycjonowania. */
 .action-bar-container,
 .inventory-bar-container {
   display: flex;
@@ -368,15 +366,8 @@ button:focus-visible {
   padding: 8px;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.2);
-  pointer-events: all; /* WAŻNE: To sprawia, że paski i ich ikony są klikalne */
+  pointer-events: all;
 }
-
-/*
- * ===============================================
- *   Style Ikon (Wspólne)
- * ===============================================
- */
-
 .ability-icon,
 .item-icon {
   width: 50px;
@@ -396,7 +387,6 @@ button:focus-visible {
   border-color: #aaa;
 }
 
-/* Styl dla WYBRANEJ ikony (działa dla obu typów) */
 .ability-icon.selected,
 .item-icon.selected {
   border-color: #f0e68c; 
@@ -410,12 +400,6 @@ button:focus-visible {
   height: 100%;
   object-fit: cover;
 }
-
-/*
- * ===============================================
- *   Nakładki na Ikony (Hotkey, Ilość, Cooldown)
- * ===============================================
- */
 
 .ability-hotkey {
   position: absolute;
@@ -467,10 +451,9 @@ button:focus-visible {
   text-shadow: 1px 1px 3px black;
 }
 
-/* Poprawione pozycjonowanie dla nazwy wybranej umiejętności */
 .choosed-ability {
   position: absolute;
-  bottom: 85px; /* Umieszczamy go nad głównym paskiem akcji */
+  bottom: 85px; 
   left: 50%;
   transform: translateX(-50%);
   font-size: 20px;

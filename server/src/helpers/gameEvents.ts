@@ -1,8 +1,8 @@
 export enum GameEventType {
+  AreaEffectTriggered = 'area-effect-triggered',
+
   PlayerDamaged = 'player-damaged',
   PlayerDeath = 'player-death',
-  SpellImpactPlayer = 'spell-impact-player',
-  SpellImpactWorld = 'spell-impact-world',
 
   StatusEffectGained = 'status-effect-gained',
   StatusEffectLost = 'status-effect-lost',
@@ -16,6 +16,11 @@ export enum GameEventType {
 }
 
 export interface GameEventPayloads {
+  [GameEventType.AreaEffectTriggered]: {
+    effectId: string;
+    position: { x: number, y: number, z: number };
+  };
+
   [GameEventType.PlayerDamaged]: {
     playerId: string;
     damage: number;
@@ -31,17 +36,7 @@ export interface GameEventPayloads {
     playerId: string;
     killerId: string;
   };
-  [GameEventType.SpellImpactPlayer]: {
-    spellId: string;
-    casterId: string;
-    hitPlayerId: string;
-    hitPoint: { x: number, y: number, z: number };
-  };
-  [GameEventType.SpellImpactWorld]: {
-    spellId: string;
-    casterId: string;
-    hitPoint: { x: number, y: number, z: number };
-  };
+
   [GameEventType.StatusEffectGained]: {
     targetId: string;
     effectId: string;

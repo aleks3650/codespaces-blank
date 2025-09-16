@@ -12,6 +12,7 @@ export type WeaponConfig = {
     };
     attackAnimation: 'interact-right' | 'attack-melee-right';
     abilityAnimations: Record<string, string>;
+    genericAnimations: Record<string, string>;
 };
 
 export const WEAPON_CONFIG: Record<string, WeaponConfig> = {
@@ -27,6 +28,10 @@ export const WEAPON_CONFIG: Record<string, WeaponConfig> = {
             fireball: 'interact-right',
             arcaneMissile: 'interact-right',
         },
+        genericAnimations: {
+            use_item: 'pick-up',
+            emote_wave: 'emote-yes',
+        }
     },
     Warrior: {
         component: Axe,
@@ -37,8 +42,12 @@ export const WEAPON_CONFIG: Record<string, WeaponConfig> = {
         },
         attackAnimation: 'attack-melee-right',
         abilityAnimations: {
-            groundSlam: 'attack-melee-right', 
-            battleShout: 'emote-yes', 
+            groundSlam: 'attack-melee-right',
+            battleShout: 'emote-yes',
         },
+        genericAnimations: {
+            use_item: 'pick-up',
+            emote_wave: 'emote-yes',
+        }
     },
 };

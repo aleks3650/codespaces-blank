@@ -1,6 +1,6 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { PointerLockControls } from '@react-three/drei';
-import * as THREE from 'three';
+import * as THREE from "three";
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { socket } from '../socket/socket';
 import { useInputContext } from '../context/InputContext';
@@ -25,7 +25,7 @@ export const PlayerControls = () => {
     const inputRef = useInputContext();
     const playerRef = useRefStore((state) => state.playerRef);
     const environmentRef = useRefStore((state) => state.environmentRef);
-    const triggerCast = useCharacterActionStore((state) => state.triggerCast);
+    const triggerAction = useCharacterActionStore((state) => state.triggerAction);
 
     const {
         selectedAction,
@@ -72,7 +72,7 @@ export const PlayerControls = () => {
                     });
 
                     startAbilityCooldown(abilityId, abilityDef.cooldown);
-                    triggerCast(socket.id!, abilityId);
+                    triggerAction(socket.id!, abilityId);
                     break;
                 }
 
@@ -89,9 +89,9 @@ export const PlayerControls = () => {
                         actionType: "useItem",
                         payload: { inventorySlot: selectedAction.inventorySlot }
                     });
-                    
+
                     startConsumableCooldown(itemDef.cooldownMs);
-                    // TODO: Dodać animację użycia przedmiotu, np. triggerCast(socket.id!, 'use_item');
+                    triggerAction(socket.id!, 'use_item');
                     break;
                 }
             }
@@ -100,8 +100,8 @@ export const PlayerControls = () => {
         document.addEventListener('mousedown', handleMouseDown);
         return () => document.removeEventListener('mousedown', handleMouseDown);
     }, [
-        camera, playerRef, environmentRef, triggerCast, isLocked, raycaster, 
-        selectedAction, isAbilityOnCooldown, startAbilityCooldown, 
+        camera, playerRef, environmentRef, triggerAction, isLocked, raycaster,
+        selectedAction, isAbilityOnCooldown, startAbilityCooldown,
         consumableCooldownEndsAt, startConsumableCooldown, addNotification
     ]);
 
@@ -120,14 +120,14 @@ export const PlayerControls = () => {
         const playerPosition = playerRef.current.position;
         const rotatedOffset = cameraOffset.clone().applyQuaternion(camera.quaternion);
         idealCameraPosition.copy(playerPosition).add(rotatedOffset);
-        
+
         rayFromPlayer.copy(playerPosition).add(new THREE.Vector3(0, 0.03, 0));
         const rayDirection = idealCameraPosition.clone().sub(rayFromPlayer).normalize();
         const rayLength = idealCameraPosition.distanceTo(rayFromPlayer);
         raycaster.set(rayFromPlayer, rayDirection);
-        
+
         const intersects = raycaster.intersectObjects(environmentRef.current.children, true);
-        const firstHit = intersects.find(hit => hit.object.uuid !== playerRef.current?.uuid); // Ignoruj trafienia w samego siebie
+        const firstHit = intersects.find(hit => hit.object.uuid !== playerRef.current?.uuid);
 
         if (firstHit && firstHit.distance < rayLength) {
             finalCameraPosition.copy(rayFromPlayer).add(rayDirection.multiplyScalar(firstHit.distance * 0.9));

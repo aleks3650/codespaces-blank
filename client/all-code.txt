@@ -1,0 +1,2302 @@
+===== src/main.tsx =====
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import './index.css'
+import MainMenu from './screens/MainMenu.tsx'
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <MainMenu />
+  </StrictMode>,
+)
+
+
+===== src/context/InputContext.tsx =====
+
+import React, { createContext, useContext } from "react";
+import { useInputControls as useOriginalInputControls } from "../hooks/useInputControls";
+import type { InputAction } from "../hooks/useInputControls";
+
+type InputState = Record<InputAction, boolean>;
+
+const InputContext = createContext<React.RefObject<InputState> | null>(null);
+
+export const InputControlsProvider = ({ children }: { children: React.ReactNode }) => {
+  const inputRef = useOriginalInputControls();
+  
+  return (
+    <InputContext.Provider value={inputRef}>
+      {children}
+    </InputContext.Provider>
+  );
+};
+
+export const useInputContext = () => {
+  const context = useContext(InputContext);
+  if (!context) {
+    throw new Error("useInputContext must be used within an InputControlsProvider");
+  }
+  return context;
+};
+
+===== src/config/weaponConfig.ts =====
+import { Wand } from '../models/Wand';
+import { Axe } from '../models/Axe';
+import * as THREE from 'three';
+import type { ForwardRefExoticComponent, RefAttributes } from 'react';
+
+export type WeaponConfig = {
+    component: ForwardRefExoticComponent<Omit<React.JSX.IntrinsicElements['group'], "ref"> & RefAttributes<THREE.Group>>;
+    transform: {
+        position: THREE.Vector3;
+        rotation: THREE.Euler;
+        scale: THREE.Vector3;
+    };
+    attackAnimation: 'interact-right' | 'attack-melee-right';
+    abilityAnimations: Record<string, string>;
+    genericAnimations: Record<string, string>;
+};
+
+export const WEAPON_CONFIG: Record<string, WeaponConfig> = {
+    Mage: {
+        component: Wand,
+        transform: {
+            position: new THREE.Vector3(-0.22, 0, 0.2),
+            rotation: new THREE.Euler(0, 0, Math.PI / 2),
+            scale: new THREE.Vector3(2, 2, 1),
+        },
+        attackAnimation: 'interact-right',
+        abilityAnimations: {
+            fireball: 'interact-right',
+            arcaneMissile: 'interact-right',
+        },
+        genericAnimations: {
+            use_item: 'pick-up',
+            emote_wave: 'emote-yes',
+        }
+    },
+    Warrior: {
+        component: Axe,
+        transform: {
+            position: new THREE.Vector3(-0.1, -0.1, 0.3),
+            rotation: new THREE.Euler(0, Math.PI / 1.5, 0),
+            scale: new THREE.Vector3(1.5, 1.5, 1.5),
+        },
+        attackAnimation: 'attack-melee-right',
+        abilityAnimations: {
+            groundSlam: 'attack-melee-right',
+            battleShout: 'emote-yes',
+        },
+        genericAnimations: {
+            use_item: 'pick-up',
+            emote_wave: 'emote-yes',
+        }
+    },
+};
+
+
+===== src/players/RemotePlayers.tsx =====
+import { useSocketStore } from "../state/Store";
+import { socket } from "../socket/socket";
+import RemotePlayer from "./RemotePlayer";
+
+const selectPlayers = (state: ReturnType<typeof useSocketStore.getState>) => state.players;
+
+const RemotePlayers = () => {
+    const allPlayers = useSocketStore(selectPlayers);
+
+    const remotePlayers = Object.fromEntries(
+        Object.entries(allPlayers).filter(([id]) => id !== socket.id)
+    );
+    return (
+        <>
+            {Object.entries(remotePlayers).map(([id, playerState]) => (
+                <RemotePlayer key={id} id={id} {...playerState} />
+            ))}
+        </>
+    );
+};
+
+export default RemotePlayers;
+
+===== src/players/LocalPlayer.tsx =====
+import * as THREE from 'three';
+import { useEffect, useMemo, useRef } from 'react';
+import { useFrame, useGraph } from '@react-three/fiber';
+import { useGLTF, useAnimations } from '@react-three/drei';
+import { SkeletonUtils } from 'three-stdlib';
+
+import { useCharacterActionStore, useRefStore, useSocketStore } from '../state/Store';
+import { socket } from '../socket/socket';
+import { CharacterModel, type GLTFResult, type ActionName } from '../models/Character';
+import { WEAPON_CONFIG } from '../config/weaponConfig';
+import { useCharacterAnimations } from '../hooks/useCharacterAnimations';
+
+const targetPosition = new THREE.Vector3();
+const LERP_FACTOR = 0.2;
+
+const selectLocalPlayer = (state: ReturnType<typeof useSocketStore.getState>) => {
+    return state.players[socket.id!];
+};
+
+const LocalPlayer = () => {
+    const localPlayerState = useSocketStore(selectLocalPlayer);
+    const playerRef = useRef<THREE.Group>(null!);
+    const setPlayerRef = useRefStore((state) => state.setPlayerRef);
+    const activeAction = useRef<ActionName>('idle');
+
+    const { scene, animations } = useGLTF('/character.glb') as unknown as GLTFResult;
+    const clone = useMemo(() => SkeletonUtils.clone(scene), [scene]);
+    const { nodes, materials } = useGraph(clone) as unknown as GLTFResult;
+    const { actions } = useAnimations(animations, playerRef);
+
+    const lastAction = useCharacterActionStore((state) => state.actions[socket.id!]);
+    
+    useEffect(() => {
+        setPlayerRef(playerRef);
+        actions.idle?.play();
+        if (playerRef.current) {
+            (playerRef.current as any)._lastProcessedAction = 0;
+        }
+        return () => setPlayerRef(null!);
+    }, [setPlayerRef, actions.idle]);
+
+    useFrame(() => {
+        if (!localPlayerState?.class || !actions) return;
+        useCharacterAnimations({
+            actions,
+            activeAction,
+            playerRef,
+            lastAction,
+            config: WEAPON_CONFIG[localPlayerState.class],
+            status: localPlayerState.status,
+            animationState: localPlayerState.animationState,
+        });
+
+        targetPosition.set(localPlayerState.position.x, localPlayerState.position.y, localPlayerState.position.z);
+        playerRef.current.position.lerp(targetPosition, LERP_FACTOR);
+    });
+    
+    useGLTF.preload('/character.glb');
+    if (!localPlayerState?.class) return null;
+
+    return (
+        <group ref={playerRef} dispose={null}>
+            <group position-y={-0.045}>
+                <CharacterModel
+                    nodes={nodes}
+                    materials={materials}
+                    characterClass={localPlayerState.class}
+                    scale={0.1}
+                />
+            </group>
+        </group>
+    );
+};
+
+export default LocalPlayer;
+
+===== src/players/RemotePlayer.tsx =====
+import * as THREE from 'three';
+import { useEffect, useMemo, useRef } from 'react';
+import { useFrame, useGraph } from '@react-three/fiber';
+import { useGLTF, useAnimations } from '@react-three/drei';
+import { SkeletonUtils } from 'three-stdlib';
+import { useCharacterActionStore, type PlayerState } from '../state/Store';
+import { CharacterModel, type GLTFResult, type ActionName } from '../models/Character';
+import { WEAPON_CONFIG } from '../config/weaponConfig';
+import { useCharacterAnimations } from '../hooks/useCharacterAnimations'; 
+const targetPosition = new THREE.Vector3();
+const targetQuaternion = new THREE.Quaternion();
+const LERP_FACTOR = 0.2;
+type RemotePlayerProps = PlayerState & { id: string };
+
+const RemotePlayer = ({ id, position, rotation, status, animationState, class: characterClass }: RemotePlayerProps) => {
+    const groupRef = useRef<THREE.Group>(null!);
+    const activeAction = useRef<ActionName>('idle');
+
+    const { scene, animations } = useGLTF('/character.glb') as unknown as GLTFResult;
+    const clone = useMemo(() => SkeletonUtils.clone(scene), [scene]);
+    const { nodes, materials } = useGraph(clone) as unknown as GLTFResult;
+    const { actions } = useAnimations(animations, groupRef);
+
+    const lastAction = useCharacterActionStore((state) => state.actions[id]);
+
+    useEffect(() => {
+        actions.idle?.play();
+        if (groupRef.current) {
+            (groupRef.current as any)._lastProcessedAction = 0;
+        }
+    }, [actions.idle]);
+
+    useFrame(() => {
+        if (!characterClass || !actions || !position || !rotation) return;
+        useCharacterAnimations({
+            actions,
+            activeAction,
+            playerRef: groupRef,
+            lastAction,
+            config: WEAPON_CONFIG[characterClass],
+            status,
+            animationState,
+        });
+
+        targetPosition.set(position.x, position.y, position.z);
+        targetQuaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
+        groupRef.current.position.lerp(targetPosition, LERP_FACTOR);
+        groupRef.current.quaternion.slerp(targetQuaternion, LERP_FACTOR);
+    });
+
+    useGLTF.preload('/character.glb');
+    if (!characterClass) return null;
+
+    return (
+        <group ref={groupRef} dispose={null}>
+            <group position-y={-0.045}>
+                <CharacterModel
+                    nodes={nodes}
+                    materials={materials}
+                    characterClass={characterClass}
+                    scale={0.1}
+                />
+            </group>
+        </group>
+    );
+};
+
+export default RemotePlayer;
+
+===== src/players/PlayerControls.tsx =====
+import { useFrame, useThree } from '@react-three/fiber';
+import { PointerLockControls } from '@react-three/drei';
+import * as THREE from "three";
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { socket } from '../socket/socket';
+import { useInputContext } from '../context/InputContext';
+import { useActionStore, useCharacterActionStore, useRefStore, useSocketStore } from '../state/Store';
+import { abilityData } from '../constants/classes';
+import { itemData } from '../constants/items';
+import { useNotificationStore } from '../state/NotificationStore';
+
+const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+const newPlayerRotation = new THREE.Quaternion();
+const cameraOffset = new THREE.Vector3(0, 0.08, 0.4);
+const idealCameraPosition = new THREE.Vector3();
+const finalCameraPosition = new THREE.Vector3();
+const rayFromPlayer = new THREE.Vector3();
+const screenCenter = new THREE.Vector2(0, 0);
+
+export const PlayerControls = () => {
+    const { camera } = useThree();
+    const sendTimer = useRef(0);
+    const raycaster = useMemo(() => new THREE.Raycaster(), []);
+    const [isLocked, setIsLocked] = useState(false);
+    const inputRef = useInputContext();
+    const playerRef = useRefStore((state) => state.playerRef);
+    const environmentRef = useRefStore((state) => state.environmentRef);
+    const triggerAction = useCharacterActionStore((state) => state.triggerAction);
+
+    const {
+        selectedAction,
+        isAbilityOnCooldown,
+        startAbilityCooldown,
+        consumableCooldownEndsAt,
+        startConsumableCooldown,
+    } = useActionStore();
+    const addNotification = useNotificationStore((state) => state.addNotification);
+
+    useEffect(() => {
+        const handleMouseDown = (event: MouseEvent) => {
+            const localPlayerStatus = useSocketStore.getState().players[socket.id!]?.status;
+            if (!isLocked || event.button !== 0 || localPlayerStatus === 'dead' || !playerRef?.current || !selectedAction) {
+                return;
+            }
+
+            switch (selectedAction.type) {
+                case 'ability': {
+                    const { id: abilityId } = selectedAction;
+                    if (isAbilityOnCooldown(abilityId)) {
+                        addNotification(`${abilityId} is not ready!`, 'error');
+                        return;
+                    }
+                    const abilityDef = abilityData.get(abilityId);
+                    if (!abilityDef) return;
+
+                    raycaster.setFromCamera(screenCenter, camera);
+                    const sceneObjects = environmentRef?.current?.children ?? [];
+                    const intersects = raycaster.intersectObjects(sceneObjects, true);
+
+                    let targetPoint = new THREE.Vector3();
+                    targetPoint = intersects.length > 0 ? intersects[0].point : raycaster.ray.at(100, targetPoint);
+                    
+                    const spellOrigin = new THREE.Vector3();
+                    playerRef.current.getWorldPosition(spellOrigin);
+                    spellOrigin.y += 0.03;
+
+                    const correctedDirection = targetPoint.sub(spellOrigin).normalize();
+                    
+                    socket.emit("player-action", {
+                        actionType: "useAbility", 
+                        payload: { abilityId, direction: [correctedDirection.x, correctedDirection.y, correctedDirection.z] }
+                    });
+
+                    startAbilityCooldown(abilityId, abilityDef.cooldown);
+                    triggerAction(socket.id!, abilityId);
+                    break;
+                }
+
+                case 'item': {
+                    if (Date.now() < consumableCooldownEndsAt) {
+                        const remaining = Math.ceil((consumableCooldownEndsAt - Date.now()) / 1000);
+                        addNotification(`Items are on cooldown (${remaining}s left)`, 'error');
+                        return;
+                    }
+                    const itemDef = itemData.get(selectedAction.id);
+                    if (!itemDef) return;
+
+                    socket.emit("player-action", {
+                        actionType: "useItem",
+                        payload: { inventorySlot: selectedAction.inventorySlot }
+                    });
+
+                    startConsumableCooldown(itemDef.cooldownMs);
+                    triggerAction(socket.id!, 'use_item');
+                    break;
+                }
+            }
+        };
+
+        document.addEventListener('mousedown', handleMouseDown);
+        return () => document.removeEventListener('mousedown', handleMouseDown);
+    }, [
+        camera, playerRef, environmentRef, triggerAction, isLocked, raycaster,
+        selectedAction, isAbilityOnCooldown, startAbilityCooldown,
+        consumableCooldownEndsAt, startConsumableCooldown, addNotification
+    ]);
+
+    useFrame((_state, delta) => {
+        const localPlayerStatus = useSocketStore.getState().players[socket.id!]?.status;
+        if (!playerRef?.current || !environmentRef?.current || !inputRef.current || localPlayerStatus === 'dead') {
+            return;
+        }
+
+        euler.setFromQuaternion(camera.quaternion);
+        euler.x = 0;
+        euler.z = 0;
+        newPlayerRotation.setFromEuler(euler);
+        playerRef.current.quaternion.copy(newPlayerRotation);
+
+        const playerPosition = playerRef.current.position;
+        const rotatedOffset = cameraOffset.clone().applyQuaternion(camera.quaternion);
+        idealCameraPosition.copy(playerPosition).add(rotatedOffset);
+
+        rayFromPlayer.copy(playerPosition).add(new THREE.Vector3(0, 0.03, 0));
+        const rayDirection = idealCameraPosition.clone().sub(rayFromPlayer).normalize();
+        const rayLength = idealCameraPosition.distanceTo(rayFromPlayer);
+        raycaster.set(rayFromPlayer, rayDirection);
+
+        const intersects = raycaster.intersectObjects(environmentRef.current.children, true);
+        const firstHit = intersects.find(hit => hit.object.uuid !== playerRef.current?.uuid);
+
+        if (firstHit && firstHit.distance < rayLength) {
+            finalCameraPosition.copy(rayFromPlayer).add(rayDirection.multiplyScalar(firstHit.distance * 0.9));
+        } else {
+            finalCameraPosition.copy(idealCameraPosition);
+        }
+        camera.position.lerp(finalCameraPosition, 20 * delta);
+
+        sendTimer.current += delta;
+        if (sendTimer.current >= 1 / 60) {
+            sendTimer.current = 0;
+            const q = playerRef.current.quaternion;
+            socket.emit("player-inputs", {
+                rotation: [q.x, q.y, q.z, q.w],
+                inputs: { ...inputRef.current },
+            });
+        }
+    });
+
+    return (
+        <PointerLockControls
+            onLock={() => setIsLocked(true)}
+            onUnlock={() => setIsLocked(false)}
+        />
+    );
+};
+
+===== src/constants/items.ts =====
+type ItemEffect = 
+    | { type: 'heal_health'; amount: number }
+    | { type: 'restore_mana'; amount: number }
+    | { type: 'apply_status_effect'; effectId: string };
+
+export interface ConsumableDefinition {
+    id: string;
+    name: string;
+    type: 'consumable';
+    effects: ItemEffect[];
+    cooldownMs: number;
+}
+
+export type ItemDefinition = ConsumableDefinition;
+
+export const itemData = new Map<string, ItemDefinition>([
+    [
+        "cheese",
+        {
+            id: "cheese",
+            name: "Kawałek sera",
+            type: 'consumable',
+            effects: [{ type: 'heal_health', amount: 25 }],
+            cooldownMs: 20000,
+        }
+    ],
+    [
+        "mana_potion",
+        {
+            id: "mana_potion",
+            name: "Eliksir Many",
+            type: 'consumable',
+            effects: [{ type: 'restore_mana', amount: 40 }],
+            cooldownMs: 30000,
+        }
+    ],
+    [
+        "spiced_meat",
+        {
+            id: "spiced_meat",
+            name: "Mięso z przyprawami",
+            type: 'consumable',
+            effects: [
+                { type: 'heal_health', amount: 15 },
+                { type: 'apply_status_effect', effectId: 'well_fed' }
+            ],
+            cooldownMs: 45000,
+        }
+    ],
+]);
+
+===== src/constants/classes.ts =====
+export const classData = new Map<string, { baseHealth: number; baseMana: number; abilities: string[] }>([
+  ["Mage", { 
+    baseHealth: 100, 
+    baseMana: 150, 
+    abilities: ["fireball", "arcaneMissile"] 
+  }],
+  ["Warrior", { 
+    baseHealth: 150, 
+    baseMana: 50,
+    abilities: ["groundSlam", "battleShout"]
+  }],
+]);
+
+export interface BaseAbilityDefinition {
+  id: string;
+  name: string;
+  manaCost: number;
+  cooldown: number; 
+}
+
+export interface ProjectileAbilityDefinition extends BaseAbilityDefinition {
+  type: 'projectile';
+  damage: number;
+  range: number;
+  appliesEffectId?: string;
+}
+
+export interface MeleeAbilityDefinition extends BaseAbilityDefinition {
+  type: 'melee';
+  damage: number;
+  shape: { type: 'cone', angle: number, range: number } | { type: 'box', width: number, depth: number };
+  appliesEffectId?: string;
+}
+
+export interface SelfBuffAbilityDefinition extends BaseAbilityDefinition {
+  type: 'self_buff';
+  appliesEffectId: string;
+}
+
+export interface RadialAoEAbilityDefinition extends BaseAbilityDefinition {
+  type: 'radial_aoe'; 
+  damage: number;
+  radius: number;
+  appliesEffectId?: string;
+}
+
+export type AbilityDefinition = ProjectileAbilityDefinition | MeleeAbilityDefinition | SelfBuffAbilityDefinition | RadialAoEAbilityDefinition;
+
+export const abilityData = new Map<string, AbilityDefinition>([
+  [
+    "fireball",
+    {
+      id: "fireball",
+      name: "Kula Ognia",
+      type: 'projectile',
+      manaCost: 10,
+      damage: 15,
+      cooldown: 2,
+      range: 100.0,
+      appliesEffectId: "burn",
+    },
+  ],
+  [
+    "arcaneMissile",
+    {
+      id: "arcaneMissile",
+      name: "Magiczny Pocisk",
+      type: 'projectile',
+      manaCost: 5,
+      damage: 8,
+      cooldown: 0.5,
+      range: 80.0,
+    },
+  ],
+  [
+    "groundSlam", 
+    {
+      id: "groundSlam",
+      name: "Uderzenie w Ziemię",
+      type: 'radial_aoe', 
+      manaCost: 20,
+      damage: 15,
+      cooldown: 8,
+      radius: 1.0 
+    }
+  ],
+  [
+    "battleShout",
+    {
+      id: "battleShout",
+      name: "Okrzyk Bojowy",
+      type: 'self_buff',
+      manaCost: 15,
+      cooldown: 20,
+      appliesEffectId: "strengthen" 
+    }
+  ]
+]);
+
+
+
+
+===== src/constants/constants.ts =====
+import * as THREE from "three";
+
+export const gl = {
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 0.6,
+          outputColorSpace: THREE.SRGBColorSpace,
+          antialias: false,
+        }
+
+===== src/models/Map.tsx =====
+/*
+Auto-generated by: https://github.com/pmndrs/gltfjsx
+Command: npx gltfjsx@6.5.3 public/mapsko.glb -t 
+*/
+
+import * as THREE from 'three'
+import { useGLTF } from '@react-three/drei'
+import type { GLTF } from 'three-stdlib'
+import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useRefStore } from '../state/Store'
+
+type GLTFResult = GLTF & {
+  nodes: {
+    grass011: THREE.Mesh
+    grass011_1: THREE.Mesh
+    grass011_2: THREE.Mesh
+    grass011_3: THREE.Mesh
+    grass011_4: THREE.Mesh
+    grass011_5: THREE.Mesh
+    grass011_6: THREE.Mesh
+    grass011_7: THREE.Mesh
+    grass011_8: THREE.Mesh
+    grass011_9: THREE.Mesh
+    grass011_10: THREE.Mesh
+    grass011_11: THREE.Mesh
+    grass011_12: THREE.Mesh
+    grass011_13: THREE.Mesh
+    grass011_14: THREE.Mesh
+    grass011_15: THREE.Mesh
+    grass011_16: THREE.Mesh
+    grass011_17: THREE.Mesh
+    grass011_18: THREE.Mesh
+    grass011_19: THREE.Mesh
+    grass011_20: THREE.Mesh
+    grass011_21: THREE.Mesh
+  }
+  materials: {
+    ['colormap.010']: THREE.MeshStandardMaterial
+    colormap: THREE.MeshStandardMaterial
+    ['colormap.001']: THREE.MeshStandardMaterial
+    ['colormap.002']: THREE.MeshStandardMaterial
+    ['colormap.003']: THREE.MeshStandardMaterial
+    ['colormap.004']: THREE.MeshStandardMaterial
+    ['colormap.005']: THREE.MeshStandardMaterial
+    ['colormap.006']: THREE.MeshStandardMaterial
+    ['colormap.008']: THREE.MeshStandardMaterial
+    ['colormap.011']: THREE.MeshStandardMaterial
+    ['colormap.012']: THREE.MeshStandardMaterial
+    ['colormap.013']: THREE.MeshStandardMaterial
+    ['colormap.014']: THREE.MeshStandardMaterial
+    ['colormap.015']: THREE.MeshStandardMaterial
+    ['colormap.016']: THREE.MeshStandardMaterial
+    ['colormap.017']: THREE.MeshStandardMaterial
+    ['colormap.018']: THREE.MeshStandardMaterial
+    ['colormap.019']: THREE.MeshStandardMaterial
+    ['colormap.020']: THREE.MeshStandardMaterial
+    ['colormap.021']: THREE.MeshStandardMaterial
+    ['colormap.023']: THREE.MeshStandardMaterial
+    ['colormap.024']: THREE.MeshStandardMaterial
+  }
+  //animations: GLTFAction[]
+}
+
+export const Mapsko = () => {
+  const { scene } = useGLTF('/mapsko.glb') as unknown as GLTFResult
+
+  const environmentRef = useRef<THREE.Group>(null!);
+
+  const setEnvironmentRef = useRefStore((state) => state.setEnvironmentRef);
+
+  useEffect(() => {
+    setEnvironmentRef(environmentRef);
+    
+    return () => setEnvironmentRef(null!);
+  }, [setEnvironmentRef]);
+
+
+  useLayoutEffect(() => {
+    scene.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true;    
+        child.receiveShadow = true; 
+      }
+    });
+  }, [scene]);
+
+  return <primitive object={scene} ref={environmentRef} />
+}
+
+useGLTF.preload('/mapsko.glb')
+
+
+
+===== src/models/Wand.tsx =====
+/*
+Auto-generated by: https://github.com/pmndrs/gltfjsx
+Command: npx gltfjsx@6.5.3 public/chopstick.glb -t 
+*/
+
+import * as THREE from 'three'
+import { forwardRef } from 'react'
+import { useGLTF } from '@react-three/drei'
+import type { GLTF } from 'three-stdlib'
+
+type GLTFResult = GLTF & {
+  nodes: {
+    chopstick_1: THREE.Mesh
+  }
+  materials: {
+    colormap: THREE.MeshStandardMaterial
+  }
+}
+
+export const Wand = forwardRef<THREE.Group, React.JSX.IntrinsicElements['group']>((props, ref) => {
+  const { nodes, materials } = useGLTF('/chopstick.glb') as unknown as GLTFResult
+  return (
+    <group ref={ref} {...props} dispose={null}>
+      <mesh geometry={nodes.chopstick_1.geometry} material={materials.colormap} />
+    </group>
+  )
+})
+
+useGLTF.preload('/chopstick.glb')
+
+===== src/models/Axe.tsx =====
+/*
+Auto-generated by: https://github.com/pmndrs/gltfjsx
+Command: npx gltfjsx@6.5.3 public/meat-tenderizer.glb -t 
+*/
+
+import * as THREE from 'three';
+import { forwardRef, useMemo } from 'react';
+import { useGLTF, useTexture } from '@react-three/drei';
+import type { GLTF } from 'three-stdlib';
+
+type GLTFResult = GLTF & {
+  nodes: {
+    ['meat-tenderizer_1']: THREE.Mesh;
+  };
+  materials: {
+    colormap: THREE.MeshStandardMaterial;
+  };
+};
+
+const axeTexturePath = '/TexturesAxe/colormap.png';
+
+export const Axe = forwardRef<THREE.Group, React.JSX.IntrinsicElements['group']>((props, ref) => {
+  const { nodes, materials } = useGLTF('/meat-tenderizer.glb') as unknown as GLTFResult;
+  const axeTexture = useTexture(axeTexturePath);
+
+  const customMaterial = useMemo(() => {
+    const newMaterial = materials.colormap.clone();
+    newMaterial.map = axeTexture;
+
+    if (newMaterial.map) {
+      newMaterial.map.flipY = false;
+    }
+    newMaterial.needsUpdate = true;
+
+    return newMaterial;
+  }, [materials.colormap, axeTexture]);
+
+  return (
+    <group ref={ref} {...props} dispose={null}>
+      <mesh
+        geometry={nodes['meat-tenderizer_1'].geometry}
+        material={customMaterial}
+      />
+    </group>
+  );
+});
+
+useTexture.preload(axeTexturePath);
+useGLTF.preload('/meat-tenderizer.glb');
+
+===== src/models/Character.tsx =====
+import * as THREE from 'three';
+import React, { useRef, useLayoutEffect } from 'react';
+import type { GLTF } from 'three-stdlib';
+import { WEAPON_CONFIG } from '../config/weaponConfig';
+
+export type ActionName = 'static' | 'idle' | 'walk' | 'sprint' | 'jump' | 'fall' | 'crouch' | 'sit' | 'drive' | 'die' | 'pick-up' | 'emote-yes' | 'emote-no' | 'holding-right' | 'holding-left' | 'holding-both' | 'holding-right-shoot' | 'holding-left-shoot' | 'holding-both-shoot' | 'attack-melee-right' | 'attack-melee-left' | 'attack-kick-right' | 'attack-kick-left' | 'interact-right' | 'interact-left' | 'wheelchair-sit' | 'wheelchair-look-left' | 'wheelchair-look-right' | 'wheelchair-move-forward' | 'wheelchair-move-back' | 'wheelchair-move-left' | 'wheelchair-move-right';
+
+interface GLTFAction extends THREE.AnimationClip {
+  name: ActionName;
+}
+
+export type GLTFResult = GLTF & {
+  nodes: {
+    ['body-mesh']: THREE.SkinnedMesh;
+    ['head-mesh']: THREE.SkinnedMesh;
+    root: THREE.Bone;
+  };
+  materials: {
+    colormap: THREE.MeshStandardMaterial;
+  };
+  animations: GLTFAction[];
+};
+
+// DEFINE AND EXPORT this new type.
+// It represents the object returned by the `useAnimations` hook from drei.
+export type AnimationStore = Record<ActionName, THREE.AnimationAction | null>;
+
+type CharacterModelProps = React.JSX.IntrinsicElements['group'] & {
+  nodes: GLTFResult['nodes'];
+  materials: GLTFResult['materials'];
+  characterClass: string;
+};
+
+export function CharacterModel({ nodes, materials, characterClass, ...props }: CharacterModelProps) {
+  const group = React.useRef<THREE.Group>(null);
+  const bodyRef = useRef<THREE.SkinnedMesh>(null);
+  const itemRef = useRef<THREE.Group>(null);
+
+  const weaponConfig = WEAPON_CONFIG[characterClass];
+  const WeaponComponent = weaponConfig?.component;
+
+  useLayoutEffect(() => {
+    if (!bodyRef.current || !itemRef.current || !weaponConfig) return;
+
+    const skeleton = bodyRef.current.skeleton;
+    const handBone = skeleton.getBoneByName('arm-right');
+
+    if (handBone) {
+      handBone.add(itemRef.current);
+
+      const { position, rotation, scale } = weaponConfig.transform;
+      itemRef.current.position.copy(position);
+      itemRef.current.rotation.copy(rotation);
+      itemRef.current.scale.copy(scale);
+    }
+
+    return () => {
+      if (handBone && itemRef.current) {
+        handBone.remove(itemRef.current);
+      }
+    };
+  }, [weaponConfig]);
+
+  return (
+    <group ref={group} {...props} dispose={null}>
+      <group name="character-male-b" rotation={[0, Math.PI, 0]}>
+        <group name="character-male-b_1">
+          <primitive object={nodes.root} />
+          <skinnedMesh
+            ref={bodyRef}
+            name="body-mesh"
+            geometry={nodes['body-mesh'].geometry}
+            material={materials.colormap}
+            skeleton={nodes['body-mesh'].skeleton}
+          />
+          <skinnedMesh
+            name="head-mesh"
+            geometry={nodes['head-mesh'].geometry}
+            material={materials.colormap}
+            skeleton={nodes['head-mesh'].skeleton}
+          />
+          {WeaponComponent && <WeaponComponent ref={itemRef} />}
+        </group>
+      </group>
+    </group>
+  );
+}
+
+===== src/state/FloatingTextStore.ts =====
+import { create } from 'zustand';
+import * as THREE from 'three';
+import { v4 as uuidv4 } from 'uuid';
+
+export interface FloatingTextData {
+  id: string;
+  text: string;
+  position: THREE.Vector3;
+  color?: string;
+  fontSize?: number;
+}
+
+interface FloatingTextState {
+  texts: FloatingTextData[];
+  addText: (data: Omit<FloatingTextData, 'id'>) => void;
+  removeText: (id: string) => void;
+}
+
+export const useFloatingTextStore = create<FloatingTextState>((set) => ({
+  texts: [],
+  addText: (data) => {
+    const newText: FloatingTextData = {
+      id: uuidv4(),
+      ...data,
+    };
+    set((state) => ({ texts: [...state.texts, newText] }));
+  },
+  removeText: (id: string) => {
+    set((state) => ({ texts: state.texts.filter((t) => t.id !== id) }));
+  },
+}));
+
+===== src/state/NotificationStore.ts =====
+import { create } from "zustand";
+import { v4 as uuidv4 } from 'uuid';
+
+export interface Notification { id: string; message: string; type: 'error' | 'info'; }
+interface NotificationState {
+  notifications: Notification[];
+  addNotification: (message: string, type?: Notification['type']) => void;
+}
+
+export const useNotificationStore = create<NotificationState>((set) => ({
+  notifications: [],
+  addNotification: (message, type = 'info') => {
+    const id = uuidv4();
+    set((state) => ({ notifications: [...state.notifications, { id, message, type }] }));
+    setTimeout(() => {
+      set((state) => ({ notifications: state.notifications.filter((n) => n.id !== id) }));
+    }, 2000);
+  },
+}));
+
+===== src/state/Store.ts =====
+import { create } from "zustand";
+import * as THREE from 'three'
+import type { RefObject } from "react";
+
+export type SelectedAction =
+  | { type: 'ability'; id: string }
+  | { type: 'item'; id: string; inventorySlot: number };
+
+export interface InventorySlot {
+  itemId: string;
+  quantity: number;
+}
+
+export interface PlayerState {
+  position: { x: number; y: number; z: number };
+  rotation: { x: number; y: number; z: number; w: number };
+  animationState: AnimationState;
+  health?: number;
+  mana?: number;
+  class?: string;
+  status: 'alive' | 'dead';
+  respawnAt: number | null;
+  activeStatusEffects: ActiveStatusEffect[];
+  inventory?: InventorySlot[];
+}
+
+export interface GameStateFromServer {
+  players: { [id: string]: PlayerState };
+}
+
+export type AnimationState = 'idle' | 'walk' | 'sprint' | 'fall';
+
+export interface ActiveStatusEffect {
+  effectId: string;
+  expiresAt: number;
+  casterId: string;
+}
+
+export interface SocketStore {
+  players: { [id: string]: PlayerState };
+  setGameState: (newState: GameStateFromServer) => void;
+}
+export const useSocketStore = create<SocketStore>((set) => ({
+  players: {},
+  setGameState: (newState) => set({ players: newState.players }),
+}));
+
+
+interface RefStore {
+  playerRef: RefObject<THREE.Group> | null;
+  environmentRef: RefObject<THREE.Group> | null;
+  setPlayerRef: (ref: RefObject<THREE.Group>) => void;
+  setEnvironmentRef: (ref: RefObject<THREE.Group>) => void;
+}
+export const useRefStore = create<RefStore>((set) => ({
+  playerRef: null,
+  environmentRef: null,
+  setPlayerRef: (ref) => set({ playerRef: ref }),
+  setEnvironmentRef: (ref) => set({ environmentRef: ref }),
+}));
+
+interface CharacterActionState {
+  actions: Record<string, { timestamp: number; actionId: string }>; 
+  triggerAction: (playerId: string, actionId: string) => void; 
+}
+
+export const useCharacterActionStore = create<CharacterActionState>((set) => ({
+  actions: {},
+  triggerAction: (playerId, actionId) => set((state) => ({
+    actions: {
+      ...state.actions,
+      [playerId]: { timestamp: Date.now(), actionId: actionId },
+    }
+  })),
+}));
+
+
+interface Effect {
+  id: string;
+  position: THREE.Vector3;
+  type: 'impact' | 'shockwave';
+}
+interface EffectState {
+  effects: Effect[];
+  addEffect: (position: { x: number; y: number; z: number }, type?: Effect['type']) => void;
+  removeEffect: (id: string) => void;
+}
+export const useEffectStore = create<EffectState>((set) => ({
+  effects: [],
+  addEffect: (position, type = 'impact') => {
+    const newEffect = { id: THREE.MathUtils.generateUUID(), position: new THREE.Vector3(position.x, position.y, position.z), type };
+    set((state) => ({ effects: [...state.effects, newEffect] }));
+  },
+  removeEffect: (id) => set((state) => ({ effects: state.effects.filter((effect) => effect.id !== id) })),
+}));
+
+
+interface LoadingState {
+  isSceneReady: boolean;
+  setSceneReady: (isReady: boolean) => void;
+}
+export const useLoadingStore = create<LoadingState>((set) => ({
+  isSceneReady: false,
+  setSceneReady: (isReady) => set({ isSceneReady: isReady }),
+}));
+
+
+interface ActionStore {
+  selectedAction: SelectedAction | null;
+  abilityCooldowns: Map<string, number>;
+  consumableCooldownEndsAt: number;
+  
+  selectAction: (action: SelectedAction | null) => void;
+  startAbilityCooldown: (abilityId: string, durationSeconds: number) => void;
+  startConsumableCooldown: (durationMs: number) => void;
+  isAbilityOnCooldown: (abilityId: string) => boolean;
+}
+
+export const useActionStore = create<ActionStore>((set, get) => ({
+  selectedAction: null,
+  abilityCooldowns: new Map(),
+  consumableCooldownEndsAt: 0,
+
+  selectAction: (action) => {
+    set({ selectedAction: action });
+  },
+
+  startAbilityCooldown: (abilityId, durationSeconds) => {
+    const newCooldowns = new Map(get().abilityCooldowns);
+    newCooldowns.set(abilityId, Date.now() + durationSeconds * 1000);
+    set({ abilityCooldowns: newCooldowns });
+  },
+
+  startConsumableCooldown: (durationMs) => {
+    set({ consumableCooldownEndsAt: Date.now() + durationMs });
+  },
+
+  isAbilityOnCooldown: (abilityId) => {
+    const endTime = get().abilityCooldowns.get(abilityId);
+    return endTime ? Date.now() < endTime : false;
+  },
+}));
+
+===== src/screens/Game.tsx =====
+import EnvironmentItem from "../components/Environment";
+import { InputControlsProvider } from "../context/InputContext";
+import LocalPlayer from "../players/LocalPlayer";
+import { PlayerControls } from "../players/PlayerControls";
+import RemotePlayers from "../players/RemotePlayers";
+import { EffectsManager } from "../components/effects/EffectsManager";
+import { FloatingTextManager } from "../components/effects/FloatingTextManager";
+// import { Effects } from "../components/Effects";
+import { SceneReadySignal } from "../components/SceneReadySignal";
+import { useActionHotkeys } from "../hooks/useActionHotkeys";
+
+const Game = () => {
+    useActionHotkeys();
+    
+    return (
+        <InputControlsProvider>
+            <EnvironmentItem />
+            <LocalPlayer />
+            <RemotePlayers />
+            <PlayerControls />
+            <EffectsManager />
+            <FloatingTextManager />
+            {/* <Effects /> */}
+            <SceneReadySignal />
+        </InputControlsProvider>
+    );
+};
+
+export default Game;
+
+
+===== src/screens/App.tsx =====
+import { useRef } from 'react';
+import { Canvas } from '@react-three/fiber';
+import { View, Stats, Preload } from '@react-three/drei';
+import '../index.css';
+import Game from './Game';
+import MiniMap from './MiniMap';
+import { useSocketConnect } from '../hooks/useSocket';
+import { Crosshair } from '../components/UI/Crosshair';
+import { HUD } from '../components/UI/HUD';
+import { DeathScreen } from '../components/UI/DeathScreen';
+import { Notifications } from '../components/UI/Notifications';
+import ConnectionStats from '../components/ConnectionStats';
+import { useSocketStore, useLoadingStore } from '../state/Store';
+import { socket } from '../socket/socket';
+import * as THREE from 'three';
+import { gl } from '../constants/constants';
+import { Suspense } from 'react';
+import { LoadingScreen } from './LoadingScreen';
+import ActionBar from '../components/ActionBar';
+import { useResetAction } from '../hooks/useResetAction';
+import { InventoryBar } from '../components/UI/InventoryBar';
+
+// import {Perf} from 'r3f-perf'
+// import {useDetectGPU} from '@react-three/drei';
+
+export default function App({ selectedClass }: { selectedClass: string }) {
+  useSocketConnect(selectedClass);
+  const localPlayer = useSocketStore((state) => state.players[socket.id!]);
+  const isSceneReady = useLoadingStore((state) => state.isSceneReady);
+
+  const mainViewRef = useRef(null!);
+  const minimapViewRef = useRef(null!);
+
+  useResetAction()
+
+  return (
+    <div ref={mainViewRef} className="container">
+      <div ref={minimapViewRef} className="view2" />
+      <Canvas
+        gl={gl}
+        shadows={{ enabled: true, type: THREE.PCFSoftShadowMap }}
+        className="canvas"
+        onCreated={(state) => (state.gl.autoClear = false)}
+      >
+        <Suspense fallback={<LoadingScreen />}>
+          <View index={1} track={mainViewRef}>
+            <Game />
+          </View>
+          <View index={2} track={minimapViewRef}>
+            <MiniMap />
+          </View>
+          <Preload all />
+        </Suspense>
+        <View.Port />
+      </Canvas>
+
+      {isSceneReady && localPlayer?.status === 'alive' && (
+        <>
+          <Crosshair />
+          <HUD />
+          <div className="main-action-container">
+            <ActionBar />
+            <InventoryBar />
+          </div>
+        </>
+      )}
+      {localPlayer?.status === 'dead' && <DeathScreen />}
+      <ConnectionStats />
+      <Notifications />
+      <Stats />
+    </div>
+  );
+}
+
+===== src/screens/MiniMap.tsx =====
+import { Environment, PerspectiveCamera } from "@react-three/drei";
+import { useFrame, useThree } from "@react-three/fiber";
+import { useRef } from "react";
+import * as THREE from "three";
+import { useRefStore } from "../state/Store";
+
+export default function MiniMap() {
+  const { playerRef, environmentRef } = useRefStore();
+  const camRef = useRef<THREE.PerspectiveCamera>(null!);
+  const markerRef = useRef<THREE.Mesh>(null!);
+  const gl = useThree((state) => state.gl);
+
+  useFrame(() => {
+    gl.clearDepth();
+    if (camRef.current && playerRef?.current) {
+      const pos = playerRef.current.position;
+      camRef.current.position.set(pos.x, 7.5, pos.z);
+      camRef.current.lookAt(pos.x, 0, pos.z);
+    }
+    if (markerRef.current && playerRef?.current) {
+      markerRef.current.position.copy(playerRef.current.position);
+    }
+  }, 1);
+  if (!playerRef?.current || !environmentRef?.current) {
+    return null;
+  }
+
+  return (
+    <>
+      <ambientLight intensity={1} />
+      <Environment preset="sunset" />
+      <PerspectiveCamera ref={camRef} makeDefault />
+
+      <primitive object={environmentRef.current} />
+      <primitive object={playerRef.current} />
+
+      <mesh ref={markerRef} renderOrder={999}>
+        <coneGeometry args={[0.3, 0.8]} />
+        <meshBasicMaterial color="red" depthTest={false} />
+      </mesh>
+    </>
+  );
+}
+
+
+===== src/screens/LoadingScreen.tsx =====
+import { Html } from "@react-three/drei";
+
+export const LoadingScreen = () => (
+  <Html center>
+    <div style={{ color: 'white', fontSize: '24px' }}>Loading...</div>
+  </Html>
+);
+
+===== src/screens/MainMenu.tsx =====
+import { useState } from "react";
+import App from "./App";
+import "../index.css";
+
+const options = ['Mage', "Warrior"]
+
+const MainMenu = () => {
+    const [gameOn, setGameOn] = useState(false);
+    const [selectedClass, setSelectedClass] = useState(options[0]);
+
+    if (gameOn) {
+        return <App selectedClass={selectedClass} />;
+    }
+
+    return (
+        <div className="main-menu-container">
+            <h1 className="game-title">PolyBrawl</h1>
+            <select 
+                id="class" 
+                name="class" 
+                className="character-select"
+                onChange={(e) => setSelectedClass(e.target.value)}
+                value={selectedClass}
+            >
+                {options.map((item) => (
+                    <option id={`Class-${item}`} key={item}>{item}</option>
+                ))}
+            </select>
+            <button className="start-game-button" onClick={() => setGameOn(true)}>
+                Start Game
+            </button>
+        </div>
+    );
+};
+
+export default MainMenu;
+
+===== src/components/UI/HUD.tsx =====
+import { useSocketStore } from '../../state/Store';
+import { socket } from '../../socket/socket';
+import { classData } from '../../constants/classes';
+
+const selectLocalPlayer = (state: ReturnType<typeof useSocketStore.getState>) => {
+  return state.players[socket.id!];
+};
+
+export const HUD = () => {
+  const localPlayer = useSocketStore(selectLocalPlayer);
+
+  if (!localPlayer) {
+    return null;
+  }
+
+  const data = classData.get(localPlayer.class || 'Mage')
+  const MAX_HEALTH = data?.baseHealth ?? 100;
+  const MAX_MANA = data?.baseMana ?? 100;
+
+  const currentHealth = +(localPlayer.health ?? MAX_HEALTH).toFixed(1); 
+  const currentMana = +(localPlayer.mana ?? MAX_MANA).toFixed(1);
+
+  const healthPercentage = (currentHealth / MAX_HEALTH) * 100;
+  const manaPercentage = (currentMana / MAX_MANA) * 100;
+
+  return (
+    <div className="hud-container">
+      <div className="stat-bar">
+        <div className="stat-bar-label">HP</div>
+        <div className="stat-bar-background">
+          <div
+            className="stat-bar-fill health"
+            style={{ width: `${healthPercentage}%` }}
+          />
+        </div>
+        <div className="stat-bar-value">
+          {currentHealth} / {MAX_HEALTH}
+        </div>
+      </div>
+      
+      <div className="stat-bar">
+        <div className="stat-bar-label">MP</div>
+        <div className="stat-bar-background">
+          <div
+            className="stat-bar-fill mana"
+            style={{ width: `${manaPercentage}%` }}
+          />
+        </div>
+        <div className="stat-bar-value">
+          {currentMana} / {MAX_MANA}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+===== src/components/UI/Crosshair.tsx =====
+export const Crosshair = () => {
+  return <div className="crosshair" />;
+};
+
+===== src/components/UI/Notifications.tsx =====
+import { useNotificationStore } from '../../state/NotificationStore';
+
+export const Notifications = () => {
+  const notifications = useNotificationStore((state) => state.notifications);
+  return (
+    <div className="notifications-container">
+      {notifications.map((n) => (
+        <div key={n.id} className={`notification ${n.type}`}>{n.message}</div>
+      ))}
+    </div>
+  );
+};
+
+===== src/components/UI/DeathScreen.tsx =====
+import { useEffect, useState } from 'react';
+import { useSocketStore } from '../../state/Store';
+import { socket } from '../../socket/socket';
+
+const selectLocalPlayer = (state: ReturnType<typeof useSocketStore.getState>) => {
+  return state.players[socket.id!];
+};
+
+export const DeathScreen = () => {
+  const localPlayer = useSocketStore(selectLocalPlayer);
+  const [timeLeft, setTimeLeft] = useState(0);
+
+  const respawnTimestamp = localPlayer?.respawnAt;
+
+  useEffect(() => {
+    if (!respawnTimestamp) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const remaining = Math.max(0, (respawnTimestamp - Date.now()) / 1000);
+      setTimeLeft(remaining);
+    }, 100);
+
+    return () => clearInterval(interval);
+
+  }, [respawnTimestamp]);
+
+  if (!localPlayer) {
+    return null;
+  }
+
+  return (
+    <div className="death-screen-container">
+      <h1>YOU ARE DEAD</h1>
+      <h2>Respawning in {timeLeft.toFixed(1)}s</h2>
+    </div>
+  );
+};
+
+===== src/components/UI/ItemIcon.tsx =====
+import { itemData } from '../../constants/items';
+import { useActionStore } from '../../state/Store';
+
+interface ItemIconProps {
+    inventorySlot: number;
+    itemId: string;
+    quantity: number;
+}
+
+export const ItemIcon = ({ inventorySlot, itemId, quantity }: ItemIconProps) => {
+    const itemDef = itemData.get(itemId);
+    const { selectedAction, selectAction } = useActionStore();
+
+    const isSelected = selectedAction?.type === 'item' && selectedAction.inventorySlot === inventorySlot;
+    
+    const handleSelect = () => {
+        selectAction({ type: 'item', id: itemId, inventorySlot });
+    };
+
+    if (!itemDef) return null;
+    
+    const className = `item-icon ${isSelected ? 'selected' : ''}`;
+    const iconPath = `/icons/${itemDef.id}.png`;
+
+    return (
+        <div className={className} onClick={handleSelect}>
+            <img src={iconPath} alt={itemDef.name} className="item-icon-image" />
+            <div className="item-quantity">{quantity}</div>
+            <div className="item-hotkey">{inventorySlot + 5}</div>
+        </div>
+    );
+};
+
+===== src/components/UI/InventoryBar.tsx =====
+import { useSocketStore } from '../../state/Store';
+import type {SocketStore}  from '../../state/Store';
+import { socket } from '../../socket/socket';
+import { ItemIcon } from './ItemIcon';
+
+const selectInventory = (state: SocketStore) => state.players[socket.id!]?.inventory ?? [];
+
+export const InventoryBar = () => {
+    const inventory = useSocketStore(selectInventory);
+
+    return (
+        <div className="inventory-bar-container">
+            {inventory.map((item, index) => (
+                <ItemIcon 
+                    key={`${item.itemId}-${index}`} 
+                    inventorySlot={index} 
+                    itemId={item.itemId} 
+                    quantity={item.quantity} 
+                />
+            ))}
+        </div>
+    );
+};
+
+===== src/components/SceneReadySignal.tsx =====
+import { useEffect } from 'react';
+import { useLoadingStore } from '../state/Store';
+
+export const SceneReadySignal = () => {
+    const setSceneReady = useLoadingStore((state) => state.setSceneReady);
+
+    useEffect(() => {
+        setSceneReady(true);
+
+        return () => {
+            setSceneReady(false);
+        };
+    }, [setSceneReady]);
+
+    return null;
+};
+
+===== src/components/AbilityIcon.tsx =====
+import { useState, useEffect } from 'react';
+import { useActionStore } from '../state/Store';
+import { abilityData } from '../constants/classes';
+
+interface AbilityIconProps {
+    abilityId: string;
+    hotkey: number;
+}
+
+export const AbilityIcon = ({ abilityId, hotkey }: AbilityIconProps) => {
+    const { 
+        isAbilityOnCooldown, 
+        abilityCooldowns, 
+        selectedAction, 
+        selectAction 
+    } = useActionStore();
+
+    const [remainingTime, setRemainingTime] = useState(0);
+
+    const ability = abilityData.get(abilityId);
+    const isOnCooldown = isAbilityOnCooldown(abilityId);
+
+    const isSelected = selectedAction?.type === 'ability' && selectedAction.id === abilityId;
+
+    useEffect(() => {
+        if (!isOnCooldown) {
+            setRemainingTime(0);
+            return;
+        }
+
+        const intervalId = setInterval(() => {
+            const endTime = abilityCooldowns.get(abilityId);
+            if (endTime) {
+                const remaining = (endTime - Date.now()) / 1000;
+                setRemainingTime(Math.max(0, remaining));
+
+                if (remaining <= 0) {
+                    clearInterval(intervalId);
+                }
+            }
+        }, 100);
+
+        return () => clearInterval(intervalId);
+    }, [abilityId, isOnCooldown, abilityCooldowns]);
+    
+    const handleSelect = () => {
+        selectAction({ type: 'ability', id: abilityId });
+    };
+
+    if (!ability) {
+        return <div className="ability-icon missing">?</div>;
+    }
+
+    const className = `ability-icon ${isSelected ? 'selected' : ''} ${isOnCooldown ? 'cooldown' : ''}`;
+    const iconPath = `/icons/${abilityId}.png`;
+
+    return (
+        <div className={className} onClick={handleSelect}>
+            <img src={iconPath} alt={ability.name} className="ability-icon-image" />
+            <div className="ability-hotkey">{hotkey}</div>
+            
+            {isOnCooldown && (
+                <>
+                    <div className="cooldown-overlay" />
+                    <div className="cooldown-text">{remainingTime.toFixed(1)}</div>
+                </>
+            )}
+        </div>
+    );
+};
+
+===== src/components/ActionBar.tsx =====
+import { classData } from '../constants/classes';
+import { socket } from '../socket/socket';
+import { useActionStore, useSocketStore } from '../state/Store'; // Zmieniony import
+import { AbilityIcon } from './AbilityIcon';
+
+const selectLocalPlayer = (state: ReturnType<typeof useSocketStore.getState>) => {
+    return state.players[socket.id!];
+};
+
+const ActionBar = () => {
+    const localPlayer = useSocketStore(selectLocalPlayer);
+    const { selectedAction } = useActionStore();
+
+    if (!localPlayer?.class) {
+        return null;
+    }
+
+    const playerAbilities = classData.get(localPlayer.class)?.abilities ?? [];
+
+    const selectedAbilityName = 
+        selectedAction?.type === 'ability' 
+        ? selectedAction.id 
+        : '';
+
+    return (
+        <>
+            <h1 className='choosed-ability'>{selectedAbilityName}</h1>
+            <div className="action-bar-container">
+                {playerAbilities.map((abilityId, index) => (
+                    <AbilityIcon
+                        key={abilityId}
+                        abilityId={abilityId}
+                        hotkey={index + 1}
+                    />
+                ))}
+            </div>
+        </>
+    );
+};
+
+export default ActionBar;
+
+===== src/components/ColliderVisualizer.tsx =====
+import { useLoader } from "@react-three/fiber";
+import * as THREE from "three";
+
+export function ColliderVisualizer() {
+  const rawData = useLoader(THREE.FileLoader, "/map_collider.json");
+  const { vertices, indices } = JSON.parse(rawData as string);
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+
+  return (
+    <mesh geometry={geometry} >
+      <meshBasicMaterial color="lime" wireframe={true} />
+    </mesh>
+  );
+}
+
+===== src/components/Environment.tsx =====
+import { Environment, Sky } from "@react-three/drei";
+// import { ColliderVisualizer } from "./ColliderVisualizer";
+import { Mapsko } from "../models/Map";
+
+const EnvironmentItem = () => {
+  return (
+    <>
+      <fog attach="fog" args={['#86a5b1', .5, 7.5]} />
+      <group rotation={[Math.PI, 0, 0]}>
+        <Sky
+          sunPosition={[5, 10, 0]}
+          turbidity={1.5}
+          rayleigh={.2}
+          mieCoefficient={0.003}
+          mieDirectionalG={0.99}
+        />
+      </group>
+      <Environment preset="sunset" background={false} />
+      <ambientLight intensity={0.15} />
+      <directionalLight
+        castShadow
+        position={[5, 10, 0]}
+        intensity={.5}
+        shadow-mapSize-width={4096}
+        shadow-mapSize-height={4096}
+        shadow-camera-near={0.5}
+        shadow-camera-far={50}
+        shadow-camera-left={-20}
+        shadow-camera-right={20}
+        shadow-camera-top={20}
+        shadow-camera-bottom={-20}
+        shadow-bias={-0.001}
+        shadow-normalBias={0.05}
+      />
+      <Mapsko />
+      {/* <ColliderVisualizer /> */}
+    </>
+  );
+};
+
+export default EnvironmentItem;
+
+
+===== src/components/ConnectionStats.tsx =====
+import { socket } from "../socket/socket";
+import { useSocketStore } from "../state/Store";
+
+const selectLocalPlayer = (state: ReturnType<typeof useSocketStore.getState>) => {
+    return state.players[socket.id!];
+};
+
+const ConnectionStats = () => {
+    const isConnected = socket.connected;
+    const socketId = socket.id;
+
+    const data = useSocketStore(selectLocalPlayer);
+    return (
+        <div
+            style={{
+                position: "fixed",
+                right: 0,
+                top: 0,
+                background: "rgba(255, 255, 255, 0.25)",
+                borderRadius: "16px",
+                boxShadow: "0 4px 30px rgba(0, 0, 0, 0.1)",
+                backdropFilter: "blur(4.1px)",
+                WebkitBackdropFilter: "blur(4.1px)",
+                border: "1px solid rgba(255, 255, 255, 0.21)",
+                zIndex: 1000,
+                padding: "10px",
+                textAlign: "right",
+                color: "black",
+                margin: "10px"
+            }}
+        >
+            {isConnected && <h1 style={{ fontSize: "14px" }}>
+                Class: {data?.class}
+            </h1>}
+            {data?.class && (
+                <h2 style={{ fontSize: "10px" }}>ID: {socketId}</h2>
+            )}
+        </div>
+    );
+};
+
+export default ConnectionStats;
+
+
+===== src/components/effects/FloatingText.tsx =====
+import { useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { Billboard, Text } from '@react-three/drei';
+import * as THREE from 'three';
+import { useFloatingTextStore } from '../../state/FloatingTextStore';
+
+interface FloatingTextProps {
+    id: string;
+    text: string;
+    position: THREE.Vector3;
+    color?: string;
+    fontSize?: number;
+}
+
+const DURATION = 1.5;
+const FLOAT_SPEED = 0.5;
+
+export const FloatingText = ({ id, text, position, color = 'white', fontSize = 0.05 }: FloatingTextProps) => {
+    const removeText = useFloatingTextStore((state) => state.removeText);
+    const textRef = useRef<any>(null!);
+    const lifeTimer = useRef(0);
+
+    useFrame((_, delta) => {
+        lifeTimer.current += delta;
+        if (textRef.current) { 
+            textRef.current.position.y += FLOAT_SPEED * delta;
+            if (lifeTimer.current > DURATION / 2) {
+                const progress = (lifeTimer.current - DURATION / 2) / (DURATION / 2);
+                textRef.current.material.opacity = 1 - progress;
+            }
+        }
+        if (lifeTimer.current >= DURATION) {
+            removeText(id);
+        }
+    });
+
+    return (
+        <Billboard position={position}>
+            <Text
+                ref={textRef}
+                font='/Inter-Regular.woff' 
+                fontSize={fontSize}
+                color={color}
+                strokeWidth=".5%"
+                strokeColor="black"
+                anchorX="center"
+                anchorY="middle"
+            >
+                {text}
+            </Text>
+        </Billboard>
+    );
+};
+
+
+===== src/components/effects/FloatingTextManager.tsx =====
+import { useFloatingTextStore } from '../../state/FloatingTextStore';
+import { FloatingText } from './FloatingText';
+
+export const FloatingTextManager = () => {
+  const texts = useFloatingTextStore((state) => state.texts);
+
+  return (
+    <>
+      {texts.map((textData) => (
+        <FloatingText
+          key={textData.id}
+          id={textData.id}
+          text={textData.text}
+          position={textData.position}
+          color={textData.color}
+          fontSize={textData.fontSize}
+        />
+      ))}
+    </>
+  );
+};
+
+===== src/components/effects/ShockwaveEffect.tsx =====
+import { useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
+import { useEffectStore } from '../../state/Store';
+
+interface ShockwaveEffectProps {
+    id: string;
+    position: THREE.Vector3;
+}
+
+const DURATION = 0.8;
+const MAX_RADIUS = 1.0;
+
+export const ShockwaveEffect = ({ id, position }: ShockwaveEffectProps) => {
+    const meshRef = useRef<THREE.Mesh>(null!);
+    const lifeTimer = useRef(0);
+    const removeEffect = useEffectStore((state) => state.removeEffect);
+
+    useFrame((_, delta) => {
+        lifeTimer.current += delta;
+        const progress = lifeTimer.current / DURATION;
+
+        if (progress >= 1) {
+            removeEffect(id);
+            return;
+        }
+
+        const currentRadius = progress * MAX_RADIUS;
+        meshRef.current.scale.set(currentRadius, currentRadius, currentRadius);
+
+        // @ts-ignore
+        meshRef.current.material.opacity = 1.0 - progress * progress;
+    });
+
+    return (
+        <mesh ref={meshRef} position={position} rotation-x={-Math.PI / 2}>
+            <ringGeometry args={[0.95, 1, 64]} />
+            <meshStandardMaterial color="yellow" emissive="yellow" transparent side={THREE.DoubleSide} />
+        </mesh>
+    );
+};
+
+===== src/components/effects/EffectsManager.tsx =====
+// src/components/effects/EffectsManager.tsx
+
+import { useEffectStore } from '../../state/Store';
+import { SpellImpactEffect } from './SpellImpactEffect';
+import { ShockwaveEffect } from './ShockwaveEffect'; 
+
+export const EffectsManager = () => {
+  const { effects } = useEffectStore();
+
+  return (
+    <>
+      {effects.map((effect) => {
+        switch (effect.type) {
+          case 'shockwave':
+            return <ShockwaveEffect key={effect.id} id={effect.id} position={effect.position} />;
+          case 'impact':
+          default:
+            return <SpellImpactEffect key={effect.id} id={effect.id} position={effect.position} />;
+        }
+      })}
+    </>
+  );
+};
+
+===== src/components/effects/SpellImpactEffect.tsx =====
+import * as THREE from 'three';
+import { useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { useEffectStore } from '../../state/Store';
+
+interface SpellImpactEffectProps {
+  id: string;
+  position: THREE.Vector3;
+}
+
+const EFFECT_DURATION = 0.75;
+
+export const SpellImpactEffect = ({ id, position }: SpellImpactEffectProps) => {
+  const meshRef = useRef<THREE.Mesh>(null!);
+  const lifeTimer = useRef(0);
+  const removeEffect = useEffectStore((state) => state.removeEffect);
+
+  useFrame((_, delta) => {
+    lifeTimer.current += delta;
+
+    const progress = lifeTimer.current / EFFECT_DURATION;
+    const scale = Math.sin(progress * Math.PI);
+    meshRef.current.scale.setScalar(scale * 0.5);
+
+    // @ts-ignore
+    meshRef.current.material.opacity = 1.0 - progress;
+
+    if (lifeTimer.current >= EFFECT_DURATION) {
+      removeEffect(id);
+    }
+  });
+
+  return (
+    <mesh ref={meshRef} position={position}>
+      <sphereGeometry args={[0.3, 16, 16]} />
+      <meshStandardMaterial color="red" emissive="red" transparent />
+    </mesh>
+  );
+};
+
+===== src/components/ColliderBox.tsx =====
+
+interface ColliderVisualizerProps {
+  radius: number;
+  length: number;
+}
+
+export const ColliderBox = ({ radius, length }: ColliderVisualizerProps) => {
+  return (
+    <mesh>
+      <capsuleGeometry args={[radius, length]} />
+      <meshBasicMaterial
+        color="lime" 
+        wireframe={true}
+        transparent={true}
+        opacity={0.75}
+      />
+    </mesh>
+  );
+};
+
+===== src/components/Effects.tsx =====
+import { useThree } from "@react-three/fiber";
+import {
+  EffectComposer,
+  Bloom,
+  HueSaturation,
+  BrightnessContrast,
+  Vignette,
+  Noise,
+  SMAA,
+  DepthOfField,
+} from "@react-three/postprocessing";
+import { BlendFunction } from "postprocessing";
+import { useEffect, useState } from "react";
+
+export function Effects() {
+  const { camera } = useThree();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    if (camera) setReady(true);
+  }, [camera]);
+
+  if (!ready) return null;
+
+  return (
+    <EffectComposer multisampling={0}>
+      <Bloom
+        mipmapBlur
+        intensity={0.35}
+        luminanceThreshold={0.19}
+        luminanceSmoothing={0.2}
+      />
+      <HueSaturation hue={0.02} saturation={0.05} />
+      <BrightnessContrast brightness={-0.1} contrast={0.15} />
+      <Vignette eskil={false} offset={0.15} darkness={0.5} />
+      <Noise
+        premultiply
+        blendFunction={BlendFunction.DARKEN}
+        opacity={0.03}
+      />
+      <DepthOfField
+        focusDistance={.1}
+        focalLength={.7}
+        bokehScale={2.5}
+      />
+      <SMAA />
+    </EffectComposer>
+  );
+}
+
+
+===== src/vite-env.d.ts =====
+/// <reference types="vite/client" />
+
+
+===== src/hooks/useActionHotkeys.ts =====
+import { useEffect } from 'react';
+import { useSocketStore, useActionStore } from '../state/Store'; 
+import { classData } from '../constants/classes';
+import { socket } from '../socket/socket';
+
+export const useActionHotkeys = () => {
+    const localPlayer = useSocketStore((state) => state.players[socket.id!]);
+    const { selectAction } = useActionStore(); 
+    const inventory = useSocketStore((state) => state.players[socket.id!]?.inventory ?? []);
+
+    useEffect(() => {
+        if (localPlayer?.class) {
+            const playerAbilities = classData.get(localPlayer.class)?.abilities;
+            if (playerAbilities && playerAbilities.length > 0) {
+                selectAction({ type: 'ability', id: playerAbilities[0] });
+            }
+        }
+    }, [localPlayer?.class, selectAction]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.repeat || !localPlayer?.class) return;
+
+            const playerAbilities = classData.get(localPlayer.class)?.abilities ?? [];
+            let abilityIndex = -1;
+            if (e.code === 'Digit1') abilityIndex = 0;
+            if (e.code === 'Digit2') abilityIndex = 1;
+            if (abilityIndex !== -1 && playerAbilities[abilityIndex]) {
+                selectAction({ type: 'ability', id: playerAbilities[abilityIndex] });
+                return;
+            }
+
+            let itemSlotIndex = -1;
+            if (e.code === 'Digit5') itemSlotIndex = 0;
+            if (e.code === 'Digit6') itemSlotIndex = 1;
+
+            if (itemSlotIndex !== -1 && inventory[itemSlotIndex]) {
+                selectAction({ 
+                    type: 'item', 
+                    id: inventory[itemSlotIndex].itemId, 
+                    inventorySlot: itemSlotIndex 
+                });
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [localPlayer, inventory, selectAction]);
+};
+
+
+===== src/hooks/useResetAction.ts =====
+import { useEffect } from 'react'
+import { socket } from '../socket/socket';
+
+export const useResetAction = () => {
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.code === 'KeyR' && !e.repeat) {
+                console.log("Sending reset action to server...");
+
+                socket.emit("player-action", {
+                    actionType: "resetPlayer",
+                    payload: {}
+                });
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [])
+}
+
+===== src/hooks/useCharacterAnimations.ts =====
+import * as THREE from 'three';
+import type { ActionName, AnimationStore } from '../models/Character';
+import type { WeaponConfig } from '../config/weaponConfig';
+import type { AnimationState } from '../state/Store';
+
+interface UseCharacterAnimationsParams {
+  actions: AnimationStore;
+  activeAction: React.MutableRefObject<ActionName>;
+  playerRef: React.RefObject<THREE.Group>;
+  lastAction: { timestamp: number; actionId: string } | undefined;
+  config: WeaponConfig;
+  status: 'alive' | 'dead';
+  animationState: AnimationState;
+}
+
+export const useCharacterAnimations = ({
+  actions,
+  activeAction,
+  playerRef,
+  lastAction,
+  config,
+  status,
+  animationState,
+}: UseCharacterAnimationsParams) => {
+  let targetAction: ActionName;
+
+  if (lastAction && playerRef.current && lastAction.timestamp > (playerRef.current as any)._lastProcessedAction) {
+    const { actionId } = lastAction;
+
+    let animName = config.abilityAnimations[actionId];
+    if (!animName) {
+      animName = config.genericAnimations[actionId];
+    }
+
+    targetAction = (animName || config.attackAnimation) as ActionName;
+
+    (playerRef.current as any)._lastProcessedAction = lastAction.timestamp;
+  } else {
+    const currentActionAnimation = actions[activeAction.current];
+    if (currentActionAnimation?.isRunning() && (activeAction.current.includes('attack') || activeAction.current.includes('interact'))) {
+      targetAction = activeAction.current;
+    } else {
+      const serverState = status === 'dead' ? 'die' : animationState;
+      targetAction = serverState.toLowerCase() as ActionName;
+    }
+  }
+
+  if (activeAction.current !== targetAction) {
+    const oldAction = actions[activeAction.current];
+    const newAction = actions[targetAction];
+
+    if (!newAction) {
+      console.warn(`Animacja o nazwie "${targetAction}" nie została znaleziona!`);
+      return;
+    }
+
+    oldAction?.fadeOut(0.2);
+    newAction.reset().fadeIn(0.2).play();
+
+    if (targetAction === 'die' || targetAction.includes('attack') || targetAction.includes('interact') || targetAction.includes('emote')) {
+      newAction.setLoop(THREE.LoopOnce, 1);
+      newAction.clampWhenFinished = true;
+    } else {
+      newAction.setLoop(THREE.LoopRepeat, Infinity);
+    }
+
+    activeAction.current = targetAction;
+  }
+};
+
+===== src/hooks/useSocket.ts =====
+import { useEffect } from "react";
+import { socket } from "../socket/socket";
+import * as THREE from 'three';
+import { 
+    type GameStateFromServer, 
+    useCharacterActionStore, 
+    useEffectStore, 
+    useSocketStore,
+} from "../state/Store";
+import { useFloatingTextStore } from "../state/FloatingTextStore";
+import { useNotificationStore } from "../state/NotificationStore";
+
+// Dla lepszego typowania, warto zdefiniować GameEvent na froncie
+// (powinien pasować do tego, co wysyła backend)
+interface GameEvent { 
+    type: string; 
+    payload: any; 
+}
+
+export function useSocketConnect(selectedClass: string) {
+
+  const setGameState = useSocketStore((state) => state.setGameState);
+  const addEffect = useEffectStore((state) => state.addEffect);
+  const addFloatingText = useFloatingTextStore((state) => state.addText);
+  const addNotification = useNotificationStore((state) => state.addNotification);
+  const triggerAction = useCharacterActionStore((state) => state.triggerAction); 
+
+  useEffect(() => {
+    socket.auth = { playerClass: selectedClass };
+
+    socket.connect();
+
+    const showDamageNumber = (payload: any) => {
+      if (!payload.position) return;
+      const basePosition = new THREE.Vector3(payload.position.x, payload.position.y, payload.position.z);
+      const randomOffset = new THREE.Vector3(
+        (Math.random() - 0.1) * 0.25,
+        0,
+        (Math.random() - 0.1) * 0.25
+      );
+      const finalPosition = basePosition.add(randomOffset);
+      addFloatingText({
+        position: finalPosition,
+        text: payload.damage.toString(),
+        color: 'red',
+        fontSize: Math.min(Math.max(payload.damage * 0.005, 0.03), 0.06)
+      });
+    };
+
+    const onGameEvents = (events: GameEvent[]) => {
+      for (const event of events) {
+        switch (event.type) {
+          case 'area-effect-triggered':
+            if (event.payload.effectId === 'groundSlam') {
+              // Używamy pozycji z eventu, co jest niezawodne
+              addEffect(event.payload.position, 'shockwave');
+            }
+            break;
+
+          // --- ISTNIEJĄCA LOGIKA ---
+
+          case 'player-damaged':
+            showDamageNumber(event.payload);
+            break;
+
+          case 'player-cast-spell':
+            // To zdarzenie jest teraz używane GŁÓWNIE do animacji postaci
+            triggerAction(event.payload.casterId, event.payload.spellId);
+            break;
+
+          case 'action-on-cooldown':
+            // Logika dla cooldownów ogólnych (np. reset, przedmioty)
+            if (event.payload.actionType === 'resetPlayer') {
+              const seconds = Math.ceil(event.payload.remainingMs / 1000);
+              addNotification(`Reset is on cooldown (${seconds}s left)`, 'error');
+            }
+            if (event.payload.actionType === 'consumable') {
+              const seconds = Math.ceil(event.payload.remainingMs / 1000);
+              addNotification(`Items are on cooldown (${seconds}s left)`, 'error');
+            }
+            break;
+
+          case 'spell-on-cooldown':
+            addNotification("Ability is not ready!", 'error');
+            break;
+
+          case 'spell-cast-failed':
+            if (event.payload.reason === 'not_enough_mana') {
+              addNotification("Not enough mana", 'info');
+            }
+            break;
+
+          case 'status-effect-gained':
+            if (event.payload.targetId === socket.id) {
+              addNotification(`Affected by: ${event.payload.effectId}`, 'info');
+            }
+            break;
+
+          // --- USUNIĘTA, PRZESTARZAŁA LOGIKA ---
+          // Usunęliśmy 'spell-impact-player' i 'spell-impact-world',
+          // ponieważ efekt trafienia jest teraz generowany przez sam pocisk na froncie.
+        }
+      }
+    };
+
+    const onGameState = (data: GameStateFromServer) => setGameState(data);
+    const onConnect = () => console.log("Hook: Connected, ID:", socket.id);
+    const onDisconnect = () => console.log("Hook: Disconnected");
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("gameState", onGameState);
+    socket.on("game-events", onGameEvents);
+
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("gameState", onGameState);
+      socket.off("game-events", onGameEvents);
+      socket.disconnect();
+    };
+  }, [setGameState, addEffect, addFloatingText, addNotification, triggerAction]);
+
+  return {};
+}
+
+===== src/hooks/useInputControls.ts =====
+import { useEffect, useRef } from "react";
+
+export type InputAction =
+  | "forward"
+  | "backward"
+  | "left"
+  | "right"
+  | "jump"
+  | "sprint"  
+  | "cameraFlip";
+
+type InputState = Record<InputAction, boolean>;
+
+type KeyCode =
+  | "KeyW"
+  | "KeyS"
+  | "KeyA"
+  | "KeyD"
+  | "Space"
+  | "ShiftLeft"
+  | "ShiftRight"
+  | "KeyC";
+
+const keyActionMap = {
+  KeyW: "forward",
+  KeyS: "backward",
+  KeyA: "left",
+  KeyD: "right",
+  Space: "jump",
+  ShiftLeft: "sprint",
+  ShiftRight: "sprint",
+  KeyC: "cameraFlip",
+} as const satisfies Record<KeyCode, InputAction>;
+
+export const useInputControls = () => {
+  const inputRef = useRef<InputState>({
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+    jump: false,
+    sprint: false,
+    cameraFlip: false,
+  });
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const action = keyActionMap[e.code as KeyCode];
+      if (!action) return;
+      if (!e.repeat) inputRef.current[action] = true;
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      const action = keyActionMap[e.code as KeyCode];
+      if (!action) return;
+      inputRef.current[action] = false;
+    };
+
+    const handleBlur = () => {
+      (Object.keys(inputRef.current) as InputAction[]).forEach((k) => {
+        inputRef.current[k] = false;
+      });
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+    window.addEventListener("blur", handleBlur);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, []);
+
+  return inputRef; 
+};
+
+
+===== src/socket/socket.ts =====
+import { io } from "socket.io-client"; 
+
+const URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+export const socket = io(URL, {
+  autoConnect: false,
+  withCredentials: true
+});
+
+

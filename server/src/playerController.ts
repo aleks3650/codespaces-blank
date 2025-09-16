@@ -94,7 +94,6 @@ export class PlayerController {
     const onGround = this.isOnGround();
     if (onGround) {
       this.velocity.y = -0.1;
-      // this.velocity.y = this.gravity * deltaTime;
       if (input.inputs.jump) {
         this.velocity.y = this.jumpStrength;
       }

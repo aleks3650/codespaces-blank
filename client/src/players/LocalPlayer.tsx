@@ -6,10 +6,9 @@ import { SkeletonUtils } from 'three-stdlib';
 
 import { useCharacterActionStore, useRefStore, useSocketStore } from '../state/Store';
 import { socket } from '../socket/socket';
-import { CharacterModel, type GLTFResult } from '../models/Character';
+import { CharacterModel, type GLTFResult, type ActionName } from '../models/Character';
 import { WEAPON_CONFIG } from '../config/weaponConfig';
-
-type ActionName = GLTFResult['animations'][number]['name'];
+import { useCharacterAnimations } from '../hooks/useCharacterAnimations';
 
 const targetPosition = new THREE.Vector3();
 const LERP_FACTOR = 0.2;
@@ -30,68 +29,33 @@ const LocalPlayer = () => {
     const { actions } = useAnimations(animations, playerRef);
 
     const lastAction = useCharacterActionStore((state) => state.actions[socket.id!]);
-
+    
     useEffect(() => {
         setPlayerRef(playerRef);
         actions.idle?.play();
+        if (playerRef.current) {
+            (playerRef.current as any)._lastProcessedAction = 0;
+        }
         return () => setPlayerRef(null!);
     }, [setPlayerRef, actions.idle]);
 
     useFrame(() => {
         if (!localPlayerState?.class || !actions) return;
-
-        const { status, animationState } = localPlayerState;
-        const config = WEAPON_CONFIG[localPlayerState.class];
-        let targetAction: ActionName;
-
-        if (lastAction && lastAction.timestamp > (playerRef.current as any)._lastProcessedAttack) {
-            const specificAnimation = config.abilityAnimations[lastAction.abilityId];
-            targetAction = (specificAnimation || config.attackAnimation) as ActionName;
-
-            (playerRef.current as any)._lastProcessedAttack = lastAction.timestamp;
-        } else {
-            const currentAttackAnimation = actions[activeAction.current];
-            if (currentAttackAnimation?.isRunning() && activeAction.current.includes('attack')) {
-                targetAction = activeAction.current;
-            } else {
-                const serverState = status === 'dead' ? 'die' : animationState.toLowerCase();
-                targetAction = serverState as ActionName;
-            }
-        }
-        
-        if (activeAction.current !== targetAction) {
-            const oldAction = actions[activeAction.current];
-            const newAction = actions[targetAction];
-            
-            if (!newAction) {
-                console.warn(`Animacja o nazwie "${targetAction}" nie została znaleziona!`);
-                return;
-            }
-
-            oldAction?.fadeOut(0.2);
-            newAction.reset().fadeIn(0.2).play();
-
-            if (targetAction === 'die' || targetAction.includes('attack') || targetAction.includes('interact') || targetAction.includes('emote')) {
-                newAction.setLoop(THREE.LoopOnce, 1);
-                newAction.clampWhenFinished = true;
-            } else {
-                newAction.setLoop(THREE.LoopRepeat, Infinity);
-            }
-            activeAction.current = targetAction;
-        }
+        useCharacterAnimations({
+            actions,
+            activeAction,
+            playerRef,
+            lastAction,
+            config: WEAPON_CONFIG[localPlayerState.class],
+            status: localPlayerState.status,
+            animationState: localPlayerState.animationState,
+        });
 
         targetPosition.set(localPlayerState.position.x, localPlayerState.position.y, localPlayerState.position.z);
         playerRef.current.position.lerp(targetPosition, LERP_FACTOR);
     });
     
-    useEffect(() => {
-        if(playerRef.current) {
-            (playerRef.current as any)._lastProcessedAttack = 0;
-        }
-    }, []);
-
     useGLTF.preload('/character.glb');
-
     if (!localPlayerState?.class) return null;
 
     return (

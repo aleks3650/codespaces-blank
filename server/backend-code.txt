@@ -1,0 +1,1230 @@
+===== main.ts =====
+import RAPIER from "npm:@dimforge/rapier3d-compat";
+import { Game } from "./src/game.ts";
+import { TICK_RATE } from "./src/helpers/constants.ts";
+import { io } from "./src/helpers/IO_Server.ts";
+import { PlayerAction, PlayerInput } from "./src/helpers/types.ts";
+
+const ALLOWED_CLASSES = ["Mage", "Warrior"];
+
+await RAPIER.init();
+
+const game = new Game();
+await game.initialize();
+
+let lastTickTime = Date.now();
+const pendingInputs: Map<string, PlayerInput> = new Map();
+
+function gameLoop() {
+  const now = Date.now();
+  const deltaTime = (now - lastTickTime) / 1000.0;
+  lastTickTime = now;
+
+  game.update(pendingInputs, deltaTime);
+
+  const liveGameState = game.getState();
+
+  io.emit("gameState", liveGameState);
+
+  pendingInputs.clear();
+
+  setTimeout(gameLoop, TICK_RATE);
+}
+
+io.on("connection", (socket) => {
+  const chosenClass = String(socket.handshake.auth.playerClass);
+  const playerClass = ALLOWED_CLASSES.includes(chosenClass) ? chosenClass : "Mage";
+
+  console.log(`socket ${socket.id} connected as a ${playerClass}`);
+  game.addNewPlayer(socket.id, playerClass);
+
+  socket.on("player-inputs", (data: PlayerInput) => {
+    data.playerId = socket.id;
+    pendingInputs.set(socket.id, data);
+  });
+
+  socket.on("player-action", (data: PlayerAction) => {
+    game.handlePlayerAction(socket.id, data);
+  });
+
+  socket.on("disconnect", (reason) => {
+    console.log(`socket ${socket.id} disconnected due to ${reason}`);
+    game.removePlayer(socket.id);
+  });
+});
+
+Deno.serve({
+  handler: io.handler(),
+  port: 8000,
+});
+
+gameLoop();
+console.log("Server Socket.IO is listening on port 8000...");
+
+===== src/physics.ts =====
+import RAPIER from "npm:@dimforge/rapier3d-compat";
+import { PlayerInput, RaycastHitResult } from "./helpers/types.ts";
+import { PlayerController } from "./playerController.ts";
+
+interface MapCollisionData {
+  vertices: number[];
+  indices: number[];
+}
+
+export class PhysicsWorld {
+  private world: RAPIER.World;
+  private playerControllers: Map<string, PlayerController> = new Map();
+
+  constructor() {
+    this.world = new RAPIER.World({ x: 0, y: 0, z: 0 });
+  }
+
+  public async initializeMapCollider(path: string) {
+    const fileContent = await Deno.readTextFile(path);
+    const data: MapCollisionData = JSON.parse(fileContent);
+
+    const vertices = new Float32Array(data.vertices);
+    const indices = new Uint32Array(data.indices);
+
+    const rigidBodyDesc = RAPIER.RigidBodyDesc.fixed();
+    const mapBody = this.world.createRigidBody(rigidBodyDesc);
+
+    const colliderDesc = RAPIER.ColliderDesc.trimesh(vertices, indices);
+    this.world.createCollider(colliderDesc, mapBody);
+
+    console.log("Map collider initialized.");
+  }
+
+  public getPlayerController(playerId: string): PlayerController | undefined {
+    return this.playerControllers.get(playerId);
+  }
+
+  public addPlayer(playerId: string) {
+    const initialPos = { x: 1.0, y: 1.5, z: 0.0 };
+    const controller = new PlayerController(this.world, initialPos);
+    this.playerControllers.set(playerId, controller);
+  }
+
+  public teleportPlayer(playerId: string, position: { x: number; y: number; z: number }) {
+    const controller = this.playerControllers.get(playerId);
+    if (controller) {
+      controller.forceTeleport(position);
+    }
+  }
+
+
+  public castRayForSpell(casterId: string, direction: number[], maxDistance: number): RaycastHitResult {
+    const casterController = this.playerControllers.get(casterId);
+    if (!casterController) return { type: "miss" };
+
+    const origin = casterController.getState().position;
+    const rayOrigin = new RAPIER.Vector3(origin.x, origin.y + 0.03, origin.z);
+    const rayDirection = new RAPIER.Vector3(direction[0], direction[1], direction[2]);
+
+    const ray = new RAPIER.Ray(rayOrigin, rayDirection);
+    const solid = true;
+
+    const casterCollider = casterController.getBody().collider(0);
+    const filterPredicate = (collider: RAPIER.Collider) => {
+      return collider.handle !== casterCollider.handle;
+    };
+
+    const hit = this.world.castRay(
+      ray,
+      maxDistance,
+      solid,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      filterPredicate
+    );
+
+    if (!hit) {
+      return { type: "miss" };
+    }
+
+    const hitPoint = ray.pointAt(hit.timeOfImpact);
+    const hitCollider = hit.collider;
+
+    for (const [playerId, controller] of this.playerControllers.entries()) {
+      if (controller.getBody().collider(0).handle === hitCollider.handle) {
+        return { type: "player", playerId, point: hitPoint };
+      }
+    }
+
+    return { type: "world", point: hitPoint };
+  }
+
+  public removePlayer(playerId: string) {
+    this.playerControllers.get(playerId)?.cleanup();
+    this.playerControllers.delete(playerId);
+  }
+
+  public findPlayersInRadius(casterId: string, radius: number): string[] {
+    const casterController = this.playerControllers.get(casterId);
+    if (!casterController) return [];
+
+    const casterPosition = casterController.getBody().translation();
+    const hitPlayerIds: string[] = [];
+
+    for (const [targetId, targetController] of this.playerControllers.entries()) {
+      if (targetId === casterId) continue; 
+
+      const targetPosition = targetController.getBody().translation();
+
+      const distance = Math.sqrt(
+        Math.pow(casterPosition.x - targetPosition.x, 2) +
+        Math.pow(casterPosition.y - targetPosition.y, 2) +
+        Math.pow(casterPosition.z - targetPosition.z, 2)
+      );
+
+      if (distance <= radius) {
+        hitPlayerIds.push(targetId);
+      }
+    }
+
+    return hitPlayerIds;
+  }
+
+
+  public update(inputs: Map<string, PlayerInput>, deltaTime: number) {
+    for (const [playerId, controller] of this.playerControllers.entries()) {
+      const playerInput = inputs.get(playerId);
+      if (playerInput) {
+        controller.update(playerInput, deltaTime);
+      }
+    }
+    this.world.step();
+  }
+
+  public getState() {
+    const playersState: { [id: string]: { position: RAPIER.Vector; rotation: RAPIER.Quaternion } } = {};
+    for (const [id, controller] of this.playerControllers.entries()) {
+      playersState[id] = controller.getState();
+    }
+    return { players: playersState };
+  }
+}
+
+===== src/gameData/items.ts =====
+import { StatusEffectDefinition } from './statusEffects.ts'
+
+type ItemEffect = 
+    | { type: 'heal_health'; amount: number }
+    | { type: 'restore_mana'; amount: number }
+    | { type: 'apply_status_effect'; effectId: StatusEffectDefinition['id'] };
+
+export interface ConsumableDefinition {
+    id: string;
+    name: string;
+    type: 'consumable';
+    effects: ItemEffect[];
+    cooldownMs: number; 
+}
+
+
+export type ItemDefinition = ConsumableDefinition;
+
+export const itemData = new Map<string, ItemDefinition>([
+    [
+        "cheese",
+        {
+            id: "cheese",
+            name: "Kawałek sera",
+            type: 'consumable',
+            effects: [
+                { type: 'heal_health', amount: 25 }
+            ],
+            cooldownMs: 20000,
+        }
+    ],
+    [
+        "mana_potion",
+        {
+            id: "mana_potion",
+            name: "Eliksir Many",
+            type: 'consumable',
+            effects: [
+                { type: 'restore_mana', amount: 40 }
+            ],
+            cooldownMs: 30000, 
+        }
+    ],
+    [
+        "spiced_meat",
+        {
+            id: "spiced_meat",
+            name: "Mięso z przyprawami",
+            type: 'consumable',
+            effects: [
+                { type: 'heal_health', amount: 15 },
+                { type: 'apply_status_effect', effectId: 'well_fed' } 
+            ],
+            cooldownMs: 45000,
+        }
+    ],
+]);
+
+===== src/gameData/classes.ts =====
+export const classData = new Map<string, { baseHealth: number; baseMana: number; abilities: string[] }>([
+  ["Mage", { baseHealth: 100, baseMana: 150, abilities: ["fireball", "arcaneMissile"] }],
+  ["Warrior", { baseHealth: 150, baseMana: 50, abilities: ["groundSlam", "battleShout"] }],
+]);
+
+===== src/gameData/statusEffects.ts =====
+export interface StatusEffectDefinition {
+  id: string;
+  duration: number;
+  damagePerSecond?: number;
+}
+
+export const statusEffectData = new Map<string, StatusEffectDefinition>([
+  [
+    "burn",
+    {
+      id: "burn",
+      duration: 5,
+      damagePerSecond: 2,
+    },
+  ],
+  ["strengthen", {
+    id: "strengthen",
+    duration: 10,
+    // statModifiers: { damageMultiplier: 1.2 }
+  }],
+  ["well_fed", {
+    id: "well_fed",
+    duration: 30, 
+  }],
+]);
+
+
+
+===== src/gameData/abilities.ts =====
+export type AbilityType = 'projectile' | 'melee' | 'self_buff';
+
+export interface BaseAbilityDefinition {
+  id: string;
+  name: string;
+  manaCost: number;
+  cooldown: number; 
+}
+
+export interface ProjectileAbilityDefinition extends BaseAbilityDefinition {
+  type: 'projectile';
+  damage: number;
+  range: number;
+  appliesEffectId?: string;
+}
+
+export interface MeleeAbilityDefinition extends BaseAbilityDefinition {
+  type: 'melee';
+  damage: number;
+  shape: { type: 'cone', angle: number, range: number } | { type: 'box', width: number, depth: number };
+  appliesEffectId?: string;
+}
+
+export interface SelfBuffAbilityDefinition extends BaseAbilityDefinition {
+  type: 'self_buff';
+  appliesEffectId: string;
+}
+
+export interface RadialAoEAbilityDefinition extends BaseAbilityDefinition {
+  type: 'radial_aoe'; 
+  damage: number;
+  radius: number;
+  appliesEffectId?: string;
+}
+
+export type AbilityDefinition = ProjectileAbilityDefinition | MeleeAbilityDefinition | SelfBuffAbilityDefinition | RadialAoEAbilityDefinition;
+
+export const abilityData = new Map<string, AbilityDefinition>([
+  [
+    "fireball",
+    {
+      id: "fireball",
+      name: "Kula Ognia",
+      type: 'projectile',
+      manaCost: 10,
+      damage: 15,
+      cooldown: 2,
+      range: 100.0,
+      appliesEffectId: "burn",
+    },
+  ],
+  [
+    "groundSlam", 
+    {
+      id: "groundSlam",
+      name: "Uderzenie w Ziemię",
+      type: 'radial_aoe', 
+      manaCost: 20,
+      damage: 15,
+      cooldown: 8,
+      radius: 3.0 
+    }
+  ],
+  [
+    "battleShout",
+    {
+      id: "battleShout",
+      name: "Okrzyk Bojowy",
+      type: 'self_buff',
+      manaCost: 15,
+      cooldown: 20,
+      appliesEffectId: "strengthen" 
+    }
+  ]
+]);
+
+
+
+===== src/gameEventManager.ts =====
+import { GameEvent, GameEventPayloads, GameEventType } from "./helpers/gameEvents.ts";
+import { io } from "./helpers/IO_Server.ts";
+
+export class GameEventManager {
+    private eventQueue: GameEvent[] = []
+
+    public queueEvent<T extends GameEventType>(
+        type: T,
+        payload: GameEventPayloads[T],
+        targetClientId?: string
+    ): void {
+        this.eventQueue.push({ type, payload, targetClientId });
+    }
+
+    public dispatchEvents(): void {
+        if (this.eventQueue.length === 0) return;
+
+        const broadcastEvents = this.eventQueue.filter(e => !e.targetClientId);
+        if (broadcastEvents.length > 0) {
+            io.emit('game-events', broadcastEvents);
+        }
+
+        const targetedEvents = this.eventQueue.filter(e => e.targetClientId);
+        for (const event of targetedEvents) {
+            if (event.targetClientId) {
+                io.to(event.targetClientId).emit('game-events', [event]);
+            }
+        }
+
+        this.eventQueue = [];
+    }
+}
+
+
+===== src/game.ts =====
+import { LivePlayerState, PlayerAction, PlayerInput, PlayerState, ActiveStatusEffect, PlayerClass, AnimationState } from "./helpers/types.ts";
+import { PhysicsWorld } from "./physics.ts";
+import { IActionCommand, UseAbilityCommand } from "./commands/actionCommands.ts";
+import { statusEffectData } from './gameData/statusEffects.ts'
+import { GameEventManager } from "./gameEventManager.ts";
+import { GameEventType } from "./helpers/gameEvents.ts";
+import { classData } from "./gameData/classes.ts";
+import { ResetPlayerCommand } from "./commands/resetPlayerCommand.ts";
+import {UseItemCommand} from './commands/useItemCommand.ts' 
+
+const RESPAWN_TIME_MS = 5000;
+const SPAWN_POINT = { x: 1, y: 1.5, z: 0.0 };
+const MANA_REGEN_PER_SECOND = .1
+const DOT_FLUSH_INTERVAL_MS = 1000;
+
+export class Game {
+  public physics: PhysicsWorld;
+  public eventManager: GameEventManager;
+  private players: Map<string, PlayerState> = new Map();
+  private actionHandlers: Map<string, IActionCommand<unknown>>;
+
+  constructor() {
+    this.physics = new PhysicsWorld();
+    this.eventManager = new GameEventManager();
+
+    this.actionHandlers = new Map();
+    this.actionHandlers.set("useAbility", new UseAbilityCommand());
+    this.actionHandlers.set("resetPlayer", new ResetPlayerCommand());
+    this.actionHandlers.set("useItem", new UseItemCommand());
+  }
+
+  public getPlayer(id: string): PlayerState | undefined {
+    return this.players.get(id);
+  }
+
+  public addNewPlayer(id: string, playerClass: string) {
+    const stats = classData.get(playerClass) ?? classData.get("Mage")!;
+
+    const newPlayer: PlayerState = {
+      id,
+      class: playerClass as PlayerClass,
+      health: stats.baseHealth,
+      mana: stats.baseMana,
+      spellCooldowns: new Map(),
+      status: "alive",
+      respawnAt: null,
+      activeStatusEffects: [],
+      animationState: "idle",
+      inventory: [
+        { itemId: 'cheese', quantity: 5 },
+        { itemId: 'mana_potion', quantity: 3 },
+      ],
+    };
+    this.players.set(id, newPlayer);
+    this.physics.addPlayer(id);
+  }
+
+  public removePlayer(id: string) {
+    this.players.delete(id);
+    this.physics.removePlayer(id);
+  }
+
+  public applyDamage(targetId: string, damage: number, killerId: string) {
+    const targetPlayer = this.players.get(targetId);
+    if (!targetPlayer || targetPlayer.status === 'dead') return;
+
+    const newHealth = targetPlayer.health - damage;
+
+    targetPlayer.health = newHealth
+
+    const playersPhysicsState = this.physics.getState();
+    const targetPhysicsState = playersPhysicsState.players[targetId];
+
+    this.eventManager.queueEvent(GameEventType.PlayerDamaged, {
+      playerId: targetId,
+      damage: damage,
+      newHealth: this._formatNumber(newHealth),
+      attackerId: killerId,
+      position: targetPhysicsState.position
+    });
+
+    if (targetPlayer.health <= 0) {
+      targetPlayer.health = 0;
+      targetPlayer.status = 'dead';
+      targetPlayer.respawnAt = Date.now() + RESPAWN_TIME_MS;
+      targetPlayer.activeStatusEffects = [];
+
+      console.log(`Player ${targetId} was killed by ${killerId}`);
+
+      this.eventManager.queueEvent(GameEventType.PlayerDeath, {
+        playerId: targetId,
+        killerId: killerId,
+      })
+    }
+  }
+
+  public applyStatusEffect(targetId: string, effectId: string, casterId: string) {
+    const targetPlayer = this.players.get(targetId);
+    const effectDef = statusEffectData.get(effectId);
+    if (!targetPlayer || !effectDef || targetPlayer.status === 'dead') {
+      return;
+    }
+
+    const newEffect: ActiveStatusEffect = {
+      effectId: effectDef.id,
+      expiresAt: Date.now() + effectDef.duration * 1000,
+      casterId: casterId,
+    };
+
+    targetPlayer.activeStatusEffects = targetPlayer.activeStatusEffects.filter(e => e.effectId !== effectId);
+    targetPlayer.activeStatusEffects.push(newEffect);
+
+    this.eventManager.queueEvent(GameEventType.StatusEffectGained, {
+      targetId: targetId,
+      effectId: effectId,
+      duration: newEffect.expiresAt - Date.now(),
+      casterId: casterId,
+    });
+  }
+
+  public handlePlayerAction(playerId: string, actionData: PlayerAction) {
+    const handler = this.actionHandlers.get(actionData.actionType);
+
+    if (handler) {
+      handler.execute(this, playerId, actionData.payload);
+    } else {
+      console.warn(`No handler for action type: ${actionData.actionType}`);
+    }
+  }
+
+  public async initialize() {
+    await this.physics.initializeMapCollider("./map_collider.json");
+  }
+
+  public update(inputs: Map<string, PlayerInput>, deltaTime: number) {
+    const alivePlayerInputs = new Map<string, PlayerInput>();
+
+    for (const player of this.players.values()) {
+      if (player.status === 'dead') {
+        if (player.respawnAt && Date.now() >= player.respawnAt) {
+          this.resetPlayer(player.id);
+        }
+      } else {
+        this._processStatusEffects(player, deltaTime);
+        this._regenerateMana(player, deltaTime);
+        const input = inputs.get(player.id);
+        if (input) {
+          const controller = this.physics.getPlayerController(player.id);
+          if (controller) {
+            let newState: AnimationState = "idle";
+
+            if (!controller.isOnGround()) {
+              newState = "fall";
+            } else {
+              const { forward, backward, left, right, sprint } = input.inputs;
+              const isMoving = forward || backward || left || right;
+              const isPureForward = forward && !backward && !left && !right;
+
+              if (!isMoving) {
+                newState = "idle";
+              } else if (isPureForward && sprint) {
+                newState = "sprint";
+              } else {
+                newState = "walk";
+              }
+            }
+            player.animationState = newState;
+          }
+          alivePlayerInputs.set(player.id, input);
+        }
+      }
+    }
+    this.physics.update(alivePlayerInputs, deltaTime);
+    this.eventManager.dispatchEvents()
+  }
+
+  public resetPlayer(playerId: string) {
+    const player = this.players.get(playerId);
+    if (!player) return;
+
+    const data = classData.get(player.class)!;
+    player.status = 'alive';
+    player.health = data.baseHealth;
+    player.mana = data.baseMana;
+    player.respawnAt = null;
+    player.activeStatusEffects = [];
+    player.spellCooldowns.clear();
+
+    this.physics.teleportPlayer(player.id, SPAWN_POINT);
+
+    this.eventManager.queueEvent(GameEventType.PlayerRespawn, {
+      playerId: player.id,
+      position: SPAWN_POINT,
+      newHealth: player.health,
+      newMana: player.mana,
+    });
+  }
+
+  private _regenerateMana(player: PlayerState, deltaTime: number) {
+    const { baseMana } = classData.get(player.class)
+
+    if (player.mana >= baseMana) return;
+
+    const regenAmount = MANA_REGEN_PER_SECOND * deltaTime;
+    player.mana = Math.min(baseMana, player.mana + regenAmount);
+  }
+
+  private _formatNumber(value: number, decimals: number = 1) {
+    return Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals);
+  }
+
+  public applyHeal(targetId: string, amount: number) {
+    const targetPlayer = this.players.get(targetId);
+    if (!targetPlayer || targetPlayer.status === 'dead') return;
+
+    const { baseHealth } = classData.get(targetPlayer.class)!;
+    targetPlayer.health = Math.min(baseHealth, targetPlayer.health + amount);
+  }
+
+  public applyManaRestore(targetId: string, amount: number) {
+    const targetPlayer = this.players.get(targetId);
+    if (!targetPlayer || targetPlayer.status === 'dead') return;
+
+    const { baseMana } = classData.get(targetPlayer.class)!;
+    targetPlayer.mana = Math.min(baseMana, targetPlayer.mana + amount);
+  }
+
+  private _processStatusEffects(player: PlayerState, deltaTime: number) {
+    player.activeStatusEffects = player.activeStatusEffects.filter(
+      (effect) => effect.expiresAt > Date.now()
+    );
+
+    if (!player.accumulatedDotDamage) {
+      player.accumulatedDotDamage = 0;
+    }
+    if (!player.lastDotFlushTime) {
+      player.lastDotFlushTime = Date.now();
+    }
+
+    for (const effect of player.activeStatusEffects) {
+      const effectDef = statusEffectData.get(effect.effectId);
+      if (effectDef?.damagePerSecond) {
+        player.accumulatedDotDamage += effectDef.damagePerSecond * deltaTime;
+      }
+    }
+
+    const now = Date.now();
+    if (now - player.lastDotFlushTime >= DOT_FLUSH_INTERVAL_MS) {
+      if (player.accumulatedDotDamage > 0) {
+        const damageToSend = Math.round(player.accumulatedDotDamage);
+
+        if (damageToSend > 0) {
+          const lastCasterId = player.activeStatusEffects[0]?.casterId ?? 'system';
+          this.applyDamage(player.id, damageToSend, lastCasterId);
+        }
+
+        player.accumulatedDotDamage = 0;
+      }
+      player.lastDotFlushTime = now;
+    }
+  }
+
+  public getState() {
+    const playersPhysicsState = this.physics.getState();
+    const liveGameState: { [id: string]: LivePlayerState } = {};
+
+    for (const id in playersPhysicsState.players) {
+      const physicsState = playersPhysicsState.players[id];
+      const logicalState = this.players.get(id);
+
+      if (logicalState) {
+        liveGameState[id] = {
+          position: physicsState.position,
+          rotation: physicsState.rotation,
+          health: this._formatNumber(logicalState.health),
+          mana: this._formatNumber(logicalState.mana),
+          class: logicalState.class,
+          status: logicalState.status,
+          respawnAt: logicalState.respawnAt,
+          animationState: logicalState.animationState,
+          inventory: logicalState.inventory,
+        };
+      }
+    }
+
+    return { players: liveGameState };
+  }
+}
+
+===== src/playerController.ts =====
+import * as THREE from "npm:three";
+import RAPIER from "npm:@dimforge/rapier3d-compat";
+import { PlayerInput } from "./helpers/types.ts";
+
+export class PlayerController {
+  private body: RAPIER.RigidBody;
+  private controller: RAPIER.KinematicCharacterController;
+  private world: RAPIER.World;
+  private velocity = new THREE.Vector3();
+
+  private readonly walkSpeed = .4;
+  private readonly sprintSpeed = 1.1;
+  private readonly jumpStrength = 1.0;
+  private readonly gravity = -10.0;
+  private readonly MAX_SLOPE_ANGLE = 25.0;
+
+  constructor(world: RAPIER.World, initialPosition: RAPIER.Vector) {
+    this.world = world;
+
+    const rigidBodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased()
+      .setTranslation(initialPosition.x, initialPosition.y, initialPosition.z);
+    this.body = world.createRigidBody(rigidBodyDesc);
+
+    const colliderDesc = RAPIER.ColliderDesc.capsule(0.02, 0.025);
+    world.createCollider(colliderDesc, this.body);
+
+    this.controller = world.createCharacterController(0.001);
+    this.controller.enableAutostep(0.5, 0.2, true);
+    this.controller.enableSnapToGround(0.25);
+  }
+
+  public isOnGround(): boolean {
+    if (!this.controller.computedGrounded()) {
+      return false;
+    }
+
+    const origin = this.body.translation();
+    const rayOrigin = new RAPIER.Vector3(origin.x, origin.y, origin.z);
+    const rayDirection = new RAPIER.Vector3(0, -1, 0);
+    const ray = new RAPIER.Ray(rayOrigin, rayDirection);
+
+    const maxDistance = 0.2;
+    const solid = true;
+
+    const filterPredicate = (collider: RAPIER.Collider) => {
+      return collider.handle !== this.body.collider(0).handle;
+    };
+
+    const hit = this.world.castRayAndGetNormal(
+      ray,
+      maxDistance,
+      solid,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      filterPredicate
+    );
+
+    if (hit) {
+      const minGroundNormalY = Math.cos(this.MAX_SLOPE_ANGLE * (Math.PI / 180.0));
+      if (hit.normal.y >= minGroundNormalY) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  public getBody(): RAPIER.RigidBody {
+    return this.body;
+  }
+
+  public teleport(position: { x: number; y: number; z: number }) {
+    this.body.setNextKinematicTranslation(position);
+  }
+
+  public update(input: PlayerInput, deltaTime: number) {
+    const [x, y, z, w] = input.rotation;
+    this.body.setRotation({ x, y, z, w }, true);
+    const playerRotation = new THREE.Quaternion(x, y, z, w);
+
+    const rawDir = new THREE.Vector3();
+    if (input.inputs.forward) rawDir.z -= 1;
+    if (input.inputs.backward) rawDir.z += 1;
+    if (input.inputs.left) rawDir.x -= 1;
+    if (input.inputs.right) rawDir.x += 1;
+
+    const moveDir = rawDir.clone();
+    if (moveDir.lengthSq() > 0) {
+      moveDir.normalize().applyQuaternion(playerRotation);
+    }
+
+    const onGround = this.isOnGround();
+    if (onGround) {
+      this.velocity.y = -0.1;
+      // this.velocity.y = this.gravity * deltaTime;
+      if (input.inputs.jump) {
+        this.velocity.y = this.jumpStrength;
+      }
+    } else {
+      this.velocity.y += this.gravity * deltaTime;
+    }
+
+    const isPureForward = rawDir.z < 0 && rawDir.x === 0;
+    const canSprint = isPureForward && input.inputs.sprint;
+    const currentSpeed = canSprint ? this.sprintSpeed : this.walkSpeed;
+
+    this.velocity.x = moveDir.x * currentSpeed;
+    this.velocity.z = moveDir.z * currentSpeed;
+
+    const movement = this.velocity.clone().multiplyScalar(deltaTime);
+    this.controller.computeColliderMovement(this.body.collider(0), movement);
+    const resolved = this.controller.computedMovement();
+    const newPos = new THREE.Vector3().copy(this.body.translation()).add(resolved);
+    this.body.setNextKinematicTranslation(newPos);
+  }
+
+  public forceTeleport(position: { x: number; y: number; z: number }) {
+    this.body.setTranslation(position, true);
+
+    this.velocity.set(0, 0, 0);
+  }
+
+  public getState() {
+    return {
+      position: this.body.translation(),
+      rotation: this.body.rotation(),
+    };
+  }
+
+  public cleanup() {
+    this.world.removeCollider(this.body.collider(0), false);
+    this.world.removeRigidBody(this.body);
+  }
+}
+
+===== src/commands/useItemCommand.ts =====
+import { Game } from "../game.ts";
+import { UseItemPayload } from "../helpers/types.ts";
+import { IActionCommand } from "./actionCommands.ts";
+import { itemData } from "../gameData/items.ts";
+import { GameEventType } from "../helpers/gameEvents.ts";
+
+export class UseItemCommand implements IActionCommand<UseItemPayload> {
+    execute(game: Game, playerId: string, payload: UseItemPayload): void {
+        const player = game.getPlayer(playerId);
+        if (!player || player.status === 'dead') return;
+
+        const now = Date.now();
+        if (now < (player.consumableCooldownEndsAt ?? 0)) {
+            game.eventManager.queueEvent(GameEventType.ActionOnCooldown, {
+                actionType: 'consumable',
+                remainingMs: player.consumableCooldownEndsAt! - now,
+            }, playerId);
+            return;
+        }
+
+        const inventorySlot = player.inventory[payload.inventorySlot];
+        if (!inventorySlot) {
+            console.warn(`Player ${playerId} tried to use item from empty slot: ${payload.inventorySlot}`);
+            return;
+        }
+
+        const itemDef = itemData.get(inventorySlot.itemId);
+        if (!itemDef || itemDef.type !== 'consumable') return;
+
+        for (const effect of itemDef.effects) {
+            switch (effect.type) {
+                case 'heal_health':
+                    game.applyHeal(playerId, effect.amount);
+                    break;
+                case 'restore_mana':
+                    game.applyManaRestore(playerId, effect.amount);
+                    break;
+                case 'apply_status_effect':
+                    game.applyStatusEffect(playerId, effect.effectId, playerId);
+                    break;
+            }
+        }
+        
+        inventorySlot.quantity -= 1;
+        if (inventorySlot.quantity <= 0) {
+            player.inventory.splice(payload.inventorySlot, 1);
+        }
+        player.consumableCooldownEndsAt = now + itemDef.cooldownMs;
+    }
+}
+
+===== src/commands/actionCommands.ts =====
+import { Game } from "../game.ts";
+import { UseAbilityPayload } from "../helpers/types.ts";
+import { abilityData, AbilityDefinition } from "../gameData/abilities.ts";
+import { classData } from "../gameData/classes.ts";
+import { GameEventType } from "../helpers/gameEvents.ts";
+
+export interface IActionCommand<T> {
+    execute(game: Game, playerId: string, payload: T): void;
+}
+
+export class UseAbilityCommand implements IActionCommand<UseAbilityPayload> {
+    execute(game: Game, playerId: string, payload: UseAbilityPayload): void {
+        const playerState = game.getPlayer(playerId);
+        if (!playerState || playerState.status === 'dead') {
+            return;
+        }
+
+        const { abilityId } = payload;
+        const ability = abilityData.get(abilityId);
+
+        if (!ability) {
+            console.warn(`Player ${playerId} tried to use unknown ability: ${abilityId}`);
+            return;
+        }
+
+        const playerClassInfo = classData.get(playerState.class);
+        if (!playerClassInfo?.abilities.includes(abilityId)) {
+            console.warn(`Player ${playerId} of class ${playerState.class} cannot use ability ${abilityId}`);
+            return;
+        }
+
+        const cooldownEndsAt = playerState.spellCooldowns.get(ability.id) ?? 0;
+        if (Date.now() < cooldownEndsAt) {
+            game.eventManager.queueEvent(
+                GameEventType.SpellOnCooldown,
+                { spellId: ability.id, remainingMs: cooldownEndsAt - Date.now() },
+                playerId
+            );
+            return;
+        }
+
+        if (playerState.mana < ability.manaCost) {
+            game.eventManager.queueEvent(
+                GameEventType.SpellCastFailed,
+                { reason: 'not_enough_mana' },
+                playerId
+            );
+            return;
+        }
+
+        playerState.mana -= ability.manaCost;
+        playerState.spellCooldowns.set(ability.id, Date.now() + ability.cooldown * 1000);
+
+        game.eventManager.queueEvent(GameEventType.PlayerCastSpell, {
+            casterId: playerId,
+            spellId: ability.id,
+        });
+
+        this.executeAbilityEffect(game, playerId, payload, ability);
+    }
+
+    private executeAbilityEffect(game: Game, playerId: string, payload: UseAbilityPayload, ability: AbilityDefinition): void {
+        switch (ability.type) {
+            case 'projectile': {
+                const result = game.physics.castRayForSpell(playerId, payload.direction, ability.range);
+
+                switch (result.type) {
+                    case "player":
+                        game.applyDamage(result.playerId, ability.damage, playerId);
+                        if (ability.appliesEffectId) {
+                            game.applyStatusEffect(result.playerId, ability.appliesEffectId, playerId);
+                        }
+                        game.eventManager.queueEvent(GameEventType.SpellImpactPlayer, {
+                            spellId: ability.id,
+                            casterId: playerId,
+                            hitPlayerId: result.playerId,
+                            hitPoint: result.point,
+                        });
+                        break;
+                    case "world":
+                        game.eventManager.queueEvent(GameEventType.SpellImpactWorld, {
+                            spellId: ability.id,
+                            casterId: playerId,
+                            hitPoint: result.point,
+                        });
+                        break;
+                    case "miss":
+                        game.eventManager.queueEvent(
+                            GameEventType.SpellCastFailed,
+                            { reason: 'missed' },
+                            playerId
+                        );
+                        break;
+                }
+                break;
+            }
+            case 'radial_aoe': {
+                const hitPlayerIds = game.physics.findPlayersInRadius(playerId, ability.radius);
+                for (const hitPlayerId of hitPlayerIds) {
+                    game.applyDamage(hitPlayerId, ability.damage, playerId);
+                    if (ability.appliesEffectId) {
+                        game.applyStatusEffect(hitPlayerId, ability.appliesEffectId, playerId);
+                    }
+                }
+                break;
+            }
+
+            case 'self_buff': {
+                game.applyStatusEffect(playerId, ability.appliesEffectId, playerId);
+                break;
+            }
+        }
+    }
+}
+
+===== src/commands/resetPlayerCommand.ts =====
+import { Game } from "../game.ts";
+import { ResetPlayerPayload } from "../helpers/types.ts";
+import { IActionCommand } from "./actionCommands.ts";
+import {GameEventType} from "../helpers/gameEvents.ts";
+
+const PLAYER_RESET_COOLDOWN_MS = 30000
+
+export class ResetPlayerCommand implements IActionCommand<ResetPlayerPayload> {
+    execute(game: Game, playerId: string, _payload: ResetPlayerPayload): void {
+        const playerState = game.getPlayer(playerId);
+        if (!playerState) {
+            console.warn(`Attempted to reset non-existent player: ${playerId}`);
+            return;
+        }
+
+        const now = Date.now();
+        const cooldownEndsAt = playerState.resetCooldownEndsAt ?? 0;
+
+        if (now < cooldownEndsAt) {
+            const remainingMs = cooldownEndsAt - now;
+            console.log(`Player ${playerId} reset is on cooldown. ${Math.ceil(remainingMs / 1000)}s remaining.`);
+            
+            game.eventManager.queueEvent(
+                GameEventType.ActionOnCooldown,
+                { actionType: 'resetPlayer', remainingMs },
+                playerId 
+            );
+            return; 
+        }
+
+        game.resetPlayer(playerId);
+
+        playerState.resetCooldownEndsAt = now + PLAYER_RESET_COOLDOWN_MS;
+    }
+}
+
+
+===== src/helpers/gameEvents.ts =====
+export enum GameEventType {
+  PlayerDamaged = 'player-damaged',
+  PlayerDeath = 'player-death',
+  SpellImpactPlayer = 'spell-impact-player',
+  SpellImpactWorld = 'spell-impact-world',
+
+  StatusEffectGained = 'status-effect-gained',
+  StatusEffectLost = 'status-effect-lost',
+
+  SpellCastFailed = 'spell-cast-failed',
+  SpellOnCooldown = 'spell-on-cooldown',
+
+  PlayerRespawn = 'player-respawn',
+  PlayerCastSpell = 'player-cast-spell',
+  ActionOnCooldown = 'action-on-cooldown',
+}
+
+export interface GameEventPayloads {
+  [GameEventType.PlayerDamaged]: {
+    playerId: string;
+    damage: number;
+    newHealth: number;
+    attackerId: string;
+    position: { x: number, y: number, z: number }
+  };
+  [GameEventType.PlayerCastSpell]: {
+    casterId: string;
+    spellId: string;
+  };
+  [GameEventType.PlayerDeath]: {
+    playerId: string;
+    killerId: string;
+  };
+  [GameEventType.SpellImpactPlayer]: {
+    spellId: string;
+    casterId: string;
+    hitPlayerId: string;
+    hitPoint: { x: number, y: number, z: number };
+  };
+  [GameEventType.SpellImpactWorld]: {
+    spellId: string;
+    casterId: string;
+    hitPoint: { x: number, y: number, z: number };
+  };
+  [GameEventType.StatusEffectGained]: {
+    targetId: string;
+    effectId: string;
+    duration: number;
+    casterId: string;
+  };
+  [GameEventType.StatusEffectLost]: {
+    targetId: string;
+    effectId: string;
+  };
+  [GameEventType.SpellCastFailed]: {
+    reason: 'not_enough_mana' | 'silenced' | 'missed';
+  };
+  [GameEventType.SpellOnCooldown]: {
+    spellId: string;
+    remainingMs: number;
+  };
+  [GameEventType.PlayerRespawn]: {
+    playerId: string;
+    position: { x: number; y: number; z: number };
+    newHealth: number;
+    newMana: number;
+  };
+  [GameEventType.ActionOnCooldown]: {
+    actionType: string;
+    remainingMs: number;
+  };
+}
+
+export interface GameEvent<T extends GameEventType = GameEventType> {
+  type: T;
+  payload: GameEventPayloads[T];
+  targetClientId?: string;
+}
+
+===== src/helpers/IO_Server.ts =====
+import { Server } from "https://deno.land/x/socket_io@0.2.1/mod.ts";
+
+export const io = new Server({
+  cors: {
+    origin: true,
+    allowedHeaders: ["my-header"],
+    credentials: true,
+  },
+});
+
+===== src/helpers/types.ts =====
+import RAPIER from "npm:@dimforge/rapier3d-compat";
+
+export interface PlayerInput {
+  playerId: string;
+  rotation: [number, number, number, number];
+  inputs: {
+    forward: boolean;
+    backward: boolean;
+    left: boolean;
+    right: boolean;
+    jump: boolean;
+    sprint: boolean;
+  };
+}
+interface InventorySlot {
+  itemId: string;
+  quantity: number;
+}
+
+// deno-lint-ignore no-empty-interface
+export interface ResetPlayerPayload { }
+
+export type PlayerClass = "Mage" | "Warrior";
+
+export interface UseItemPayload {
+    inventorySlot: number; 
+}
+
+export interface PlayerState {
+  id: string;
+  class: PlayerClass;
+  health: number;
+  mana: number;
+  spellCooldowns: Map<string, number>;
+  status: "alive" | "dead";
+  respawnAt: number | null;
+  inventory: InventorySlot[];
+  consumableCooldownEndsAt?: number;
+  resetCooldownEndsAt?: number;
+  activeStatusEffects: ActiveStatusEffect[];
+  accumulatedDotDamage?: number;
+  lastDotFlushTime?: number;
+  animationState: AnimationState
+}
+
+export interface UseAbilityPayload {
+  abilityId: string;
+  direction: [number, number, number, number];
+}
+
+export interface PlayerAction {
+  actionType: "useAbility" | "resetPlayer" | "useItem";
+  payload: UseAbilityPayload | ResetPlayerPayload | UseItemPayload;
+}
+
+export type RaycastHitResult =
+  | { type: "player"; playerId: string; point: RAPIER.Vector }
+  | { type: "world"; point: RAPIER.Vector }
+  | { type: "miss" };
+
+export interface LivePlayerState {
+  position: RAPIER.Vector;
+  rotation: RAPIER.Quaternion;
+  health: number;
+  mana: number;
+  class: PlayerClass;
+  status: "alive" | "dead";
+  respawnAt: number | null;
+  animationState: AnimationState;
+  inventory: InventorySlot[];
+}
+
+export interface ActiveStatusEffect {
+  effectId: string;
+  expiresAt: number;
+  casterId: string;
+}
+
+export type AnimationState = "idle" | "walk" | "sprint" | "fall";
+
+
+
+===== src/helpers/constants.ts =====
+export const TICK_RATE = 1000 / 60;
+export const MAX_TICKS = 60;
+export const MAX_MANA = 100;
+

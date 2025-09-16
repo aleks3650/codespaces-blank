@@ -8,7 +8,6 @@ interface AbilityIconProps {
 }
 
 export const AbilityIcon = ({ abilityId, hotkey }: AbilityIconProps) => {
-    // Pobieramy dane i funkcje z nowego, zunifikowanego store'a
     const { 
         isAbilityOnCooldown, 
         abilityCooldowns, 
@@ -21,10 +20,8 @@ export const AbilityIcon = ({ abilityId, hotkey }: AbilityIconProps) => {
     const ability = abilityData.get(abilityId);
     const isOnCooldown = isAbilityOnCooldown(abilityId);
 
-    // Sprawdzamy, czy TA konkretna umiejętność jest zaznaczona
     const isSelected = selectedAction?.type === 'ability' && selectedAction.id === abilityId;
 
-    // Logika odliczania cooldownu pozostaje bez zmian, ale korzysta z nowych danych
     useEffect(() => {
         if (!isOnCooldown) {
             setRemainingTime(0);
@@ -46,7 +43,6 @@ export const AbilityIcon = ({ abilityId, hotkey }: AbilityIconProps) => {
         return () => clearInterval(intervalId);
     }, [abilityId, isOnCooldown, abilityCooldowns]);
     
-    // Funkcja do wybierania tej umiejętności po kliknięciu
     const handleSelect = () => {
         selectAction({ type: 'ability', id: abilityId });
     };
@@ -55,7 +51,6 @@ export const AbilityIcon = ({ abilityId, hotkey }: AbilityIconProps) => {
         return <div className="ability-icon missing">?</div>;
     }
 
-    // Klasy CSS są dynamicznie dodawane na podstawie stanu
     const className = `ability-icon ${isSelected ? 'selected' : ''} ${isOnCooldown ? 'cooldown' : ''}`;
     const iconPath = `/icons/${abilityId}.png`;
 

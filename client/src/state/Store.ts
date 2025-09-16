@@ -36,9 +36,6 @@ export interface ActiveStatusEffect {
   casterId: string;
 }
 
-// --- STORE'Y ZUSTAND ---
-
-// Przechowuje stan gry otrzymywany z serwera
 export interface SocketStore {
   players: { [id: string]: PlayerState };
   setGameState: (newState: GameStateFromServer) => void;
@@ -49,7 +46,6 @@ export const useSocketStore = create<SocketStore>((set) => ({
 }));
 
 
-// Przechowuje referencje do obiektów 3D w scenie
 interface RefStore {
   playerRef: RefObject<THREE.Group> | null;
   environmentRef: RefObject<THREE.Group> | null;
@@ -63,21 +59,22 @@ export const useRefStore = create<RefStore>((set) => ({
   setEnvironmentRef: (ref) => set({ environmentRef: ref }),
 }));
 
-
-// Uruchamia animacje akcji (ataku, użycia przedmiotu)
 interface CharacterActionState {
-  actions: Record<string, { timestamp: number; abilityId: string }>;
-  triggerCast: (playerId: string, abilityId: string) => void;
+  actions: Record<string, { timestamp: number; actionId: string }>; 
+  triggerAction: (playerId: string, actionId: string) => void; 
 }
+
 export const useCharacterActionStore = create<CharacterActionState>((set) => ({
   actions: {},
-  triggerCast: (playerId, abilityId) => set((state) => ({
-    actions: { ...state.actions, [playerId]: { timestamp: Date.now(), abilityId } },
+  triggerAction: (playerId, actionId) => set((state) => ({
+    actions: {
+      ...state.actions,
+      [playerId]: { timestamp: Date.now(), actionId: actionId },
+    }
   })),
 }));
 
 
-// Zarządza efektami wizualnymi (np. eksplozje)
 interface Effect {
   id: string;
   position: THREE.Vector3;
@@ -98,7 +95,6 @@ export const useEffectStore = create<EffectState>((set) => ({
 }));
 
 
-// Zarządza stanem ładowania sceny
 interface LoadingState {
   isSceneReady: boolean;
   setSceneReady: (isReady: boolean) => void;
@@ -109,7 +105,6 @@ export const useLoadingStore = create<LoadingState>((set) => ({
 }));
 
 
-// NOWY, ZUNIFIKOWANY STORE DO ZARZĄDZANIA AKCJAMI I COOLDOWNAMI
 interface ActionStore {
   selectedAction: SelectedAction | null;
   abilityCooldowns: Map<string, number>;
@@ -127,10 +122,6 @@ export const useActionStore = create<ActionStore>((set, get) => ({
   consumableCooldownEndsAt: 0,
 
   selectAction: (action) => {
-    // if (action?.type === 'ability' && get().isAbilityOnCooldown(action.id)) {
-    //   // Opcjonalnie: powiadomienie, że nie można wybrać, bo jest na cooldownie
-    //   return;
-    // }
     set({ selectedAction: action });
   },
 

@@ -1,11 +1,19 @@
 import { useEffect } from "react";
 import { socket } from "../socket/socket";
-import * as THREE from 'three'
-import { type GameStateFromServer, useCharacterActionStore, useEffectStore, useSocketStore } from "../state/Store";
+import * as THREE from 'three';
+import { 
+    type GameStateFromServer, 
+    useCharacterActionStore, 
+    useEffectStore, 
+    useSocketStore,
+} from "../state/Store";
 import { useFloatingTextStore } from "../state/FloatingTextStore";
 import { useNotificationStore } from "../state/NotificationStore";
 
-interface GameEvent { type: string; payload: any; }
+interface GameEvent { 
+    type: string; 
+    payload: any; 
+}
 
 export function useSocketConnect(selectedClass: string) {
 
@@ -13,8 +21,7 @@ export function useSocketConnect(selectedClass: string) {
   const addEffect = useEffectStore((state) => state.addEffect);
   const addFloatingText = useFloatingTextStore((state) => state.addText);
   const addNotification = useNotificationStore((state) => state.addNotification);
-  const triggerCast = useCharacterActionStore((state) => state.triggerCast);
-
+  const triggerAction = useCharacterActionStore((state) => state.triggerAction); 
 
   useEffect(() => {
     socket.auth = { playerClass: selectedClass };
@@ -41,22 +48,20 @@ export function useSocketConnect(selectedClass: string) {
     const onGameEvents = (events: GameEvent[]) => {
       for (const event of events) {
         switch (event.type) {
-          case 'spell-impact-player':
-          case 'spell-impact-world':
-            addEffect(event.payload.hitPoint);
+          case 'area-effect-triggered':
+            if (event.payload.effectId === 'groundSlam') {
+              addEffect(event.payload.position, 'shockwave');
+            } else if (event.payload.effectId === 'spellImpact') {
+              addEffect(event.payload.position, 'impact');
+            }
             break;
 
           case 'player-damaged':
             showDamageNumber(event.payload);
             break;
+
           case 'player-cast-spell':
-            triggerCast(event.payload.casterId, event.payload.spellId);
-            if (event.payload.spellId === 'groundSlam') {
-              const caster = useSocketStore.getState().players[event.payload.casterId];
-              if (caster) {
-                addEffect(caster.position, 'shockwave');
-              }
-            }
+            triggerAction(event.payload.casterId, event.payload.spellId);
             break;
 
           case 'action-on-cooldown':
@@ -64,10 +69,14 @@ export function useSocketConnect(selectedClass: string) {
               const seconds = Math.ceil(event.payload.remainingMs / 1000);
               addNotification(`Reset is on cooldown (${seconds}s left)`, 'error');
             }
+            if (event.payload.actionType === 'consumable') {
+              const seconds = Math.ceil(event.payload.remainingMs / 1000);
+              addNotification(`Items are on cooldown (${seconds}s left)`, 'error');
+            }
             break;
 
           case 'spell-on-cooldown':
-            addNotification("Not ready!", 'error');
+            addNotification("Ability is not ready!", 'error');
             break;
 
           case 'spell-cast-failed':
@@ -87,7 +96,7 @@ export function useSocketConnect(selectedClass: string) {
 
     const onGameState = (data: GameStateFromServer) => setGameState(data);
     const onConnect = () => console.log("Hook: Connected, ID:", socket.id);
-    const onDisconnect = () => console.log("Hook: Rozłączono");
+    const onDisconnect = () => console.log("Hook: Disconnected");
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
@@ -99,9 +108,9 @@ export function useSocketConnect(selectedClass: string) {
       socket.off("disconnect", onDisconnect);
       socket.off("gameState", onGameState);
       socket.off("game-events", onGameEvents);
-      socket.disconnect()
+      socket.disconnect();
     };
-  }, [setGameState, addEffect, addFloatingText, addNotification, triggerCast]);
+  }, [setGameState, addEffect, addFloatingText, addNotification, triggerAction]);
 
   return {};
 }
