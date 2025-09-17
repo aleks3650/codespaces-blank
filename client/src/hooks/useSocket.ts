@@ -1,18 +1,18 @@
 import { useEffect } from "react";
 import { socket } from "../socket/socket";
 import * as THREE from 'three';
-import { 
-    type GameStateFromServer, 
-    useCharacterActionStore, 
-    useEffectStore, 
-    useSocketStore,
+import {
+  type GameStateFromServer,
+  useCharacterActionStore,
+  useEffectStore,
+  useSocketStore,
 } from "../state/Store";
 import { useFloatingTextStore } from "../state/FloatingTextStore";
 import { useNotificationStore } from "../state/NotificationStore";
 
-interface GameEvent { 
-    type: string; 
-    payload: any; 
+interface GameEvent {
+  type: string;
+  payload: any;
 }
 
 export function useSocketConnect(selectedClass: string) {
@@ -21,7 +21,7 @@ export function useSocketConnect(selectedClass: string) {
   const addEffect = useEffectStore((state) => state.addEffect);
   const addFloatingText = useFloatingTextStore((state) => state.addText);
   const addNotification = useNotificationStore((state) => state.addNotification);
-  const triggerAction = useCharacterActionStore((state) => state.triggerAction); 
+  const triggerAction = useCharacterActionStore((state) => state.triggerAction);
 
   useEffect(() => {
     socket.auth = { playerClass: selectedClass };
@@ -77,6 +77,12 @@ export function useSocketConnect(selectedClass: string) {
 
           case 'spell-on-cooldown':
             addNotification("Ability is not ready!", 'error');
+            break;
+
+          case 'player-reset-started':
+            if (event.payload.playerId === socket.id) {
+              addNotification("Restarting in 3 seconds...", 'info');
+            }
             break;
 
           case 'spell-cast-failed':

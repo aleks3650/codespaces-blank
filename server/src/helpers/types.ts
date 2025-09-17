@@ -23,7 +23,7 @@ export interface ResetPlayerPayload { }
 export type PlayerClass = "Mage" | "Warrior";
 
 export interface UseItemPayload {
-    inventorySlot: number; 
+  inventorySlot: number;
 }
 
 export interface PlayerState {
@@ -40,7 +40,8 @@ export interface PlayerState {
   activeStatusEffects: ActiveStatusEffect[];
   accumulatedDotDamage?: number;
   lastDotFlushTime?: number;
-  animationState: AnimationState
+  animationState: AnimationState;
+  resettingUntil?: number | null;
 }
 
 export interface UseAbilityPayload {
@@ -49,7 +50,7 @@ export interface UseAbilityPayload {
 }
 
 export interface PlayerAction {
-  actionType: "useAbility" | "resetPlayer" | "useItem";
+  actionType: "useAbility" | "requestReset" | "useItem"; 
   payload: UseAbilityPayload | ResetPlayerPayload | UseItemPayload;
 }
 

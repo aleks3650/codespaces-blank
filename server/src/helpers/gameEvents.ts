@@ -13,6 +13,9 @@ export enum GameEventType {
   PlayerRespawn = 'player-respawn',
   PlayerCastSpell = 'player-cast-spell',
   ActionOnCooldown = 'action-on-cooldown',
+
+  PlayerResetStarted = 'player-reset-started',
+
 }
 
 export interface GameEventPayloads {
@@ -63,6 +66,10 @@ export interface GameEventPayloads {
   [GameEventType.ActionOnCooldown]: {
     actionType: string;
     remainingMs: number;
+  };
+  [GameEventType.PlayerResetStarted]: {
+    playerId: string;
+    duration: number; 
   };
 }
 

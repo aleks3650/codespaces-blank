@@ -8,7 +8,7 @@ export const useResetAction = () => {
                 console.log("Sending reset action to server...");
 
                 socket.emit("player-action", {
-                    actionType: "resetPlayer",
+                    actionType: "requestReset",
                     payload: {}
                 });
             }

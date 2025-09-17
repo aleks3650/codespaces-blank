@@ -5,8 +5,8 @@ import { statusEffectData } from './gameData/statusEffects.ts'
 import { GameEventManager } from "./gameEventManager.ts";
 import { GameEventType } from "./helpers/gameEvents.ts";
 import { classData } from "./gameData/classes.ts";
-import { ResetPlayerCommand } from "./commands/resetPlayerCommand.ts";
-import {UseItemCommand} from './commands/useItemCommand.ts' 
+import { RequestResetCommand } from "./commands/requestResetCommand.ts";
+import { UseItemCommand } from './commands/useItemCommand.ts'
 
 const RESPAWN_TIME_MS = 5000;
 const SPAWN_POINT = { x: 1, y: 1.5, z: 0.0 };
@@ -25,7 +25,7 @@ export class Game {
 
     this.actionHandlers = new Map();
     this.actionHandlers.set("useAbility", new UseAbilityCommand());
-    this.actionHandlers.set("resetPlayer", new ResetPlayerCommand());
+    this.actionHandlers.set("requestReset", new RequestResetCommand());
     this.actionHandlers.set("useItem", new UseItemCommand());
   }
 
@@ -136,6 +136,11 @@ export class Game {
     const alivePlayerInputs = new Map<string, PlayerInput>();
 
     for (const player of this.players.values()) {
+      if (player.resettingUntil && Date.now() >= player.resettingUntil) {
+        this.resetPlayer(player.id);
+        continue;
+      }
+
       if (player.status === 'dead') {
         if (player.respawnAt && Date.now() >= player.respawnAt) {
           this.resetPlayer(player.id);
@@ -143,6 +148,10 @@ export class Game {
       } else {
         this._processStatusEffects(player, deltaTime);
         this._regenerateMana(player, deltaTime);
+
+        if (player.resettingUntil) {
+          continue;
+        }
         const input = inputs.get(player.id);
         if (input) {
           const controller = this.physics.getPlayerController(player.id);
@@ -185,6 +194,7 @@ export class Game {
     player.respawnAt = null;
     player.activeStatusEffects = [];
     player.spellCooldowns.clear();
+    player.resettingUntil = null;
 
     this.physics.teleportPlayer(player.id, SPAWN_POINT);
 
