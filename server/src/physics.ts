@@ -1,6 +1,7 @@
 import RAPIER from "npm:@dimforge/rapier3d-compat";
 import { PlayerInput, RaycastHitResult } from "./helpers/types.ts";
 import { PlayerController } from "./playerController.ts";
+import * as THREE from "npm:three"; // NEW IMPORT
 
 interface MapCollisionData {
   vertices: number[];
@@ -10,7 +11,6 @@ interface MapCollisionData {
 export class PhysicsWorld {
   private world: RAPIER.World;
   private playerControllers: Map<string, PlayerController> = new Map();
-
   constructor() {
     this.world = new RAPIER.World({ x: 0, y: 0, z: 0 });
   }
@@ -105,7 +105,7 @@ export class PhysicsWorld {
     const hitPlayerIds: string[] = [];
 
     for (const [targetId, targetController] of this.playerControllers.entries()) {
-      if (targetId === casterId) continue; 
+      if (targetId === casterId) continue;
 
       const targetPosition = targetController.getBody().translation();
 
@@ -116,6 +116,42 @@ export class PhysicsWorld {
       );
 
       if (distance <= radius) {
+        hitPlayerIds.push(targetId);
+      }
+    }
+
+    return hitPlayerIds;
+  }
+  
+  public findPlayersInCone(casterId: string, range: number, coneAngleDegrees: number): string[] {
+    const casterController = this.playerControllers.get(casterId);
+    if (!casterController) return [];
+
+    const casterState = casterController.getState();
+    const casterPosition = new THREE.Vector3(casterState.position.x, casterState.position.y, casterState.position.z);
+    const casterQuaternion = new THREE.Quaternion(casterState.rotation.x, casterState.rotation.y, casterState.rotation.z, casterState.rotation.w);
+
+    const forwardVector = new THREE.Vector3(0, 0, -1).applyQuaternion(casterQuaternion);
+
+    const hitPlayerIds: string[] = [];
+    const coneAngleCos = Math.cos(coneAngleDegrees * (Math.PI / 180.0));
+
+    for (const [targetId, targetController] of this.playerControllers.entries()) {
+      if (targetId === casterId) continue;
+
+      const targetPosition = targetController.getBody().translation();
+      const targetVector = new THREE.Vector3(targetPosition.x, targetPosition.y, targetPosition.z);
+
+      const distance = casterPosition.distanceTo(targetVector);
+
+      if (distance > range) {
+        continue; 
+      }
+
+      const directionToTarget = targetVector.sub(casterPosition).normalize();
+      const dotProduct = forwardVector.dot(directionToTarget);
+
+      if (dotProduct > coneAngleCos) {
         hitPlayerIds.push(targetId);
       }
     }

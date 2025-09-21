@@ -1,6 +1,10 @@
+// ===== src/game.ts =====
 import { LivePlayerState, PlayerAction, PlayerInput, PlayerState, ActiveStatusEffect, PlayerClass, AnimationState } from "./helpers/types.ts";
 import { PhysicsWorld } from "./physics.ts";
+// START CHANGE
 import { IActionCommand, UseAbilityCommand } from "./commands/actionCommands.ts";
+import { AutoAttackCommand } from "./commands/autoAttackCommand.ts";
+// END CHANGE
 import { statusEffectData } from './gameData/statusEffects.ts'
 import { GameEventManager } from "./gameEventManager.ts";
 import { GameEventType } from "./helpers/gameEvents.ts";
@@ -27,7 +31,12 @@ export class Game {
     this.actionHandlers.set("useAbility", new UseAbilityCommand());
     this.actionHandlers.set("requestReset", new RequestResetCommand());
     this.actionHandlers.set("useItem", new UseItemCommand());
+    // START CHANGE
+    this.actionHandlers.set("autoAttack", new AutoAttackCommand());
+    // END CHANGE
   }
+
+  // ... (getPlayer, addNewPlayer, removePlayer, applyDamage, applyStatusEffect, handlePlayerAction, initialize are unchanged)
 
   public getPlayer(id: string): PlayerState | undefined {
     return this.players.get(id);
@@ -134,15 +143,16 @@ export class Game {
 
   public update(inputs: Map<string, PlayerInput>, deltaTime: number) {
     const alivePlayerInputs = new Map<string, PlayerInput>();
+    const now = Date.now();
 
     for (const player of this.players.values()) {
-      if (player.resettingUntil && Date.now() >= player.resettingUntil) {
+      if (player.resettingUntil && now >= player.resettingUntil) {
         this.resetPlayer(player.id);
         continue;
       }
 
       if (player.status === 'dead') {
-        if (player.respawnAt && Date.now() >= player.respawnAt) {
+        if (player.respawnAt && now >= player.respawnAt) {
           this.resetPlayer(player.id);
         }
       } else {
@@ -154,11 +164,23 @@ export class Game {
         }
         const input = inputs.get(player.id);
         if (input) {
+            const isActionLocked = player.actionLockUntil && now < player.actionLockUntil;
+            if (isActionLocked) {
+                input.inputs.forward = false;
+                input.inputs.backward = false;
+                input.inputs.left = false;
+                input.inputs.right = false;
+                input.inputs.sprint = false;
+                input.inputs.jump = false;
+            }
+
           const controller = this.physics.getPlayerController(player.id);
           if (controller) {
             let newState: AnimationState = "idle";
-
-            if (!controller.isOnGround()) {
+            if (isActionLocked) {
+                newState = "idle"; 
+            }
+            else if (!controller.isOnGround()) {
               newState = "fall";
             } else {
               const { forward, backward, left, right, sprint } = input.inputs;
@@ -195,6 +217,9 @@ export class Game {
     player.activeStatusEffects = [];
     player.spellCooldowns.clear();
     player.resettingUntil = null;
+    // START CHANGE
+    player.actionLockUntil = null;
+    // END CHANGE
 
     this.physics.teleportPlayer(player.id, SPAWN_POINT);
 

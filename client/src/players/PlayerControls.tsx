@@ -1,3 +1,4 @@
+// ===== src/players/PlayerControls.tsx =====
 import { useFrame, useThree } from '@react-three/fiber';
 import { PointerLockControls } from '@react-three/drei';
 import * as THREE from "three";
@@ -37,68 +38,88 @@ export const PlayerControls = () => {
     const addNotification = useNotificationStore((state) => state.addNotification);
 
     useEffect(() => {
+        const handleContextMenu = (event: MouseEvent) => {
+            event.preventDefault();
+        };
+
         const handleMouseDown = (event: MouseEvent) => {
             const localPlayerStatus = useSocketStore.getState().players[socket.id!]?.status;
-            if (!isLocked || event.button !== 0 || localPlayerStatus === 'dead' || !playerRef?.current || !selectedAction) {
+            if (!isLocked || localPlayerStatus === 'dead' || !playerRef?.current) {
                 return;
             }
 
-            switch (selectedAction.type) {
-                case 'ability': {
-                    const { id: abilityId } = selectedAction;
-                    if (isAbilityOnCooldown(abilityId)) {
-                        addNotification(`${abilityId} is not ready!`, 'error');
-                        return;
+            if (event.button === 0) {
+                socket.emit("player-action", {
+                    actionType: "autoAttack",
+                    payload: {}
+                });
+                triggerAction(socket.id!, 'autoAttack'); 
+                return;
+            }
+
+            if (event.button === 2) {
+                if (!selectedAction) return;
+                
+                switch (selectedAction.type) {
+                    case 'ability': {
+                        const { id: abilityId } = selectedAction;
+                        if (isAbilityOnCooldown(abilityId)) {
+                            addNotification(`${abilityId} is not ready!`, 'error');
+                            return;
+                        }
+                        const abilityDef = abilityData.get(abilityId);
+                        if (!abilityDef) return;
+
+                        raycaster.setFromCamera(screenCenter, camera);
+                        const sceneObjects = environmentRef?.current?.children ?? [];
+                        const intersects = raycaster.intersectObjects(sceneObjects, true);
+
+                        let targetPoint = new THREE.Vector3();
+                        targetPoint = intersects.length > 0 ? intersects[0].point : raycaster.ray.at(100, targetPoint);
+                        
+                        const spellOrigin = new THREE.Vector3();
+                        playerRef.current.getWorldPosition(spellOrigin);
+                        spellOrigin.y += 0.03;
+
+                        const correctedDirection = targetPoint.sub(spellOrigin).normalize();
+                        
+                        socket.emit("player-action", {
+                            actionType: "useAbility", 
+                            payload: { abilityId, direction: [correctedDirection.x, correctedDirection.y, correctedDirection.z] }
+                        });
+
+                        startAbilityCooldown(abilityId, abilityDef.cooldown);
+                        triggerAction(socket.id!, abilityId);
+                        break;
                     }
-                    const abilityDef = abilityData.get(abilityId);
-                    if (!abilityDef) return;
+                    case 'item': {
+                        if (Date.now() < consumableCooldownEndsAt) {
+                            const remaining = Math.ceil((consumableCooldownEndsAt - Date.now()) / 1000);
+                            addNotification(`Items are on cooldown (${remaining}s left)`, 'error');
+                            return;
+                        }
+                        const itemDef = itemData.get(selectedAction.id);
+                        if (!itemDef) return;
 
-                    raycaster.setFromCamera(screenCenter, camera);
-                    const sceneObjects = environmentRef?.current?.children ?? [];
-                    const intersects = raycaster.intersectObjects(sceneObjects, true);
+                        socket.emit("player-action", {
+                            actionType: "useItem",
+                            payload: { inventorySlot: selectedAction.inventorySlot }
+                        });
 
-                    let targetPoint = new THREE.Vector3();
-                    targetPoint = intersects.length > 0 ? intersects[0].point : raycaster.ray.at(100, targetPoint);
-                    
-                    const spellOrigin = new THREE.Vector3();
-                    playerRef.current.getWorldPosition(spellOrigin);
-                    spellOrigin.y += 0.03;
-
-                    const correctedDirection = targetPoint.sub(spellOrigin).normalize();
-                    
-                    socket.emit("player-action", {
-                        actionType: "useAbility", 
-                        payload: { abilityId, direction: [correctedDirection.x, correctedDirection.y, correctedDirection.z] }
-                    });
-
-                    startAbilityCooldown(abilityId, abilityDef.cooldown);
-                    triggerAction(socket.id!, abilityId);
-                    break;
-                }
-
-                case 'item': {
-                    if (Date.now() < consumableCooldownEndsAt) {
-                        const remaining = Math.ceil((consumableCooldownEndsAt - Date.now()) / 1000);
-                        addNotification(`Items are on cooldown (${remaining}s left)`, 'error');
-                        return;
+                        startConsumableCooldown(itemDef.cooldownMs);
+                        triggerAction(socket.id!, 'use_item');
+                        break;
                     }
-                    const itemDef = itemData.get(selectedAction.id);
-                    if (!itemDef) return;
-
-                    socket.emit("player-action", {
-                        actionType: "useItem",
-                        payload: { inventorySlot: selectedAction.inventorySlot }
-                    });
-
-                    startConsumableCooldown(itemDef.cooldownMs);
-                    triggerAction(socket.id!, 'use_item');
-                    break;
                 }
             }
         };
 
         document.addEventListener('mousedown', handleMouseDown);
-        return () => document.removeEventListener('mousedown', handleMouseDown);
+        document.addEventListener('contextmenu', handleContextMenu);
+        return () => {
+            document.removeEventListener('mousedown', handleMouseDown);
+            document.removeEventListener('contextmenu', handleContextMenu);
+        };
     }, [
         camera, playerRef, environmentRef, triggerAction, isLocked, raycaster,
         selectedAction, isAbilityOnCooldown, startAbilityCooldown,

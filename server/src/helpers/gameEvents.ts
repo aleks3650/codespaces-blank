@@ -3,6 +3,7 @@ export enum GameEventType {
 
   PlayerDamaged = 'player-damaged',
   PlayerDeath = 'player-death',
+  PlayerAutoAttacked = 'player-auto-attacked',
 
   StatusEffectGained = 'status-effect-gained',
   StatusEffectLost = 'status-effect-lost',
@@ -34,6 +35,9 @@ export interface GameEventPayloads {
   [GameEventType.PlayerCastSpell]: {
     casterId: string;
     spellId: string;
+  };
+  [GameEventType.PlayerAutoAttacked]: {
+    attackerId: string;
   };
   [GameEventType.PlayerDeath]: {
     playerId: string;
@@ -69,7 +73,7 @@ export interface GameEventPayloads {
   };
   [GameEventType.PlayerResetStarted]: {
     playerId: string;
-    duration: number; 
+    duration: number;
   };
 }
 

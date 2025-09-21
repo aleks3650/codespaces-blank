@@ -789,8 +789,6 @@ export type GLTFResult = GLTF & {
   animations: GLTFAction[];
 };
 
-// DEFINE AND EXPORT this new type.
-// It represents the object returned by the `useAnimations` hook from drei.
 export type AnimationStore = Record<ActionName, THREE.AnimationAction | null>;
 
 type CharacterModelProps = React.JSX.IntrinsicElements['group'] & {
@@ -1521,7 +1519,7 @@ export const AbilityIcon = ({ abilityId, hotkey }: AbilityIconProps) => {
 ===== src/components/ActionBar.tsx =====
 import { classData } from '../constants/classes';
 import { socket } from '../socket/socket';
-import { useActionStore, useSocketStore } from '../state/Store'; // Zmieniony import
+import { useActionStore, useSocketStore } from '../state/Store';
 import { AbilityIcon } from './AbilityIcon';
 
 const selectLocalPlayer = (state: ReturnType<typeof useSocketStore.getState>) => {
@@ -1793,8 +1791,6 @@ export const ShockwaveEffect = ({ id, position }: ShockwaveEffectProps) => {
 };
 
 ===== src/components/effects/EffectsManager.tsx =====
-// src/components/effects/EffectsManager.tsx
-
 import { useEffectStore } from '../../state/Store';
 import { SpellImpactEffect } from './SpellImpactEffect';
 import { ShockwaveEffect } from './ShockwaveEffect'; 
@@ -1998,7 +1994,7 @@ export const useResetAction = () => {
                 console.log("Sending reset action to server...");
 
                 socket.emit("player-action", {
-                    actionType: "resetPlayer",
+                    actionType: "requestReset",
                     payload: {}
                 });
             }
@@ -2086,20 +2082,18 @@ export const useCharacterAnimations = ({
 import { useEffect } from "react";
 import { socket } from "../socket/socket";
 import * as THREE from 'three';
-import { 
-    type GameStateFromServer, 
-    useCharacterActionStore, 
-    useEffectStore, 
-    useSocketStore,
+import {
+  type GameStateFromServer,
+  useCharacterActionStore,
+  useEffectStore,
+  useSocketStore,
 } from "../state/Store";
 import { useFloatingTextStore } from "../state/FloatingTextStore";
 import { useNotificationStore } from "../state/NotificationStore";
 
-// Dla lepszego typowania, warto zdefiniować GameEvent na froncie
-// (powinien pasować do tego, co wysyła backend)
-interface GameEvent { 
-    type: string; 
-    payload: any; 
+interface GameEvent {
+  type: string;
+  payload: any;
 }
 
 export function useSocketConnect(selectedClass: string) {
@@ -2108,7 +2102,7 @@ export function useSocketConnect(selectedClass: string) {
   const addEffect = useEffectStore((state) => state.addEffect);
   const addFloatingText = useFloatingTextStore((state) => state.addText);
   const addNotification = useNotificationStore((state) => state.addNotification);
-  const triggerAction = useCharacterActionStore((state) => state.triggerAction); 
+  const triggerAction = useCharacterActionStore((state) => state.triggerAction);
 
   useEffect(() => {
     socket.auth = { playerClass: selectedClass };
@@ -2137,24 +2131,21 @@ export function useSocketConnect(selectedClass: string) {
         switch (event.type) {
           case 'area-effect-triggered':
             if (event.payload.effectId === 'groundSlam') {
-              // Używamy pozycji z eventu, co jest niezawodne
               addEffect(event.payload.position, 'shockwave');
+            } else if (event.payload.effectId === 'spellImpact') {
+              addEffect(event.payload.position, 'impact');
             }
             break;
-
-          // --- ISTNIEJĄCA LOGIKA ---
 
           case 'player-damaged':
             showDamageNumber(event.payload);
             break;
 
           case 'player-cast-spell':
-            // To zdarzenie jest teraz używane GŁÓWNIE do animacji postaci
             triggerAction(event.payload.casterId, event.payload.spellId);
             break;
 
           case 'action-on-cooldown':
-            // Logika dla cooldownów ogólnych (np. reset, przedmioty)
             if (event.payload.actionType === 'resetPlayer') {
               const seconds = Math.ceil(event.payload.remainingMs / 1000);
               addNotification(`Reset is on cooldown (${seconds}s left)`, 'error');
@@ -2169,6 +2160,12 @@ export function useSocketConnect(selectedClass: string) {
             addNotification("Ability is not ready!", 'error');
             break;
 
+          case 'player-reset-started':
+            if (event.payload.playerId === socket.id) {
+              addNotification("Restarting in 3 seconds...", 'info');
+            }
+            break;
+
           case 'spell-cast-failed':
             if (event.payload.reason === 'not_enough_mana') {
               addNotification("Not enough mana", 'info');
@@ -2180,10 +2177,6 @@ export function useSocketConnect(selectedClass: string) {
               addNotification(`Affected by: ${event.payload.effectId}`, 'info');
             }
             break;
-
-          // --- USUNIĘTA, PRZESTARZAŁA LOGIKA ---
-          // Usunęliśmy 'spell-impact-player' i 'spell-impact-world',
-          // ponieważ efekt trafienia jest teraz generowany przez sam pocisk na froncie.
         }
       }
     };

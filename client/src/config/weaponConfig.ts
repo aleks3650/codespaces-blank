@@ -10,6 +10,7 @@ export type WeaponConfig = {
         rotation: THREE.Euler;
         scale: THREE.Vector3;
     };
+    autoAttackAnimation: 'interact-right' | 'attack-melee-right';
     attackAnimation: 'interact-right' | 'attack-melee-right';
     abilityAnimations: Record<string, string>;
     genericAnimations: Record<string, string>;
@@ -23,6 +24,7 @@ export const WEAPON_CONFIG: Record<string, WeaponConfig> = {
             rotation: new THREE.Euler(0, 0, Math.PI / 2),
             scale: new THREE.Vector3(2, 2, 1),
         },
+        autoAttackAnimation: 'interact-right',
         attackAnimation: 'interact-right',
         abilityAnimations: {
             fireball: 'interact-right',
@@ -31,6 +33,7 @@ export const WEAPON_CONFIG: Record<string, WeaponConfig> = {
         genericAnimations: {
             use_item: 'pick-up',
             emote_wave: 'emote-yes',
+            'get-hit': 'crouch',
         }
     },
     Warrior: {
@@ -40,6 +43,7 @@ export const WEAPON_CONFIG: Record<string, WeaponConfig> = {
             rotation: new THREE.Euler(0, Math.PI / 1.5, 0),
             scale: new THREE.Vector3(1.5, 1.5, 1.5),
         },
+        autoAttackAnimation: 'attack-melee-right',
         attackAnimation: 'attack-melee-right',
         abilityAnimations: {
             groundSlam: 'attack-melee-right',
@@ -48,6 +52,7 @@ export const WEAPON_CONFIG: Record<string, WeaponConfig> = {
         genericAnimations: {
             use_item: 'pick-up',
             emote_wave: 'emote-yes',
+            'get-hit': 'crouch',
         }
     },
 };

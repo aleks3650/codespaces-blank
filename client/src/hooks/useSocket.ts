@@ -58,12 +58,19 @@ export function useSocketConnect(selectedClass: string) {
 
           case 'player-damaged':
             showDamageNumber(event.payload);
+            triggerAction(event.payload.playerId, 'get-hit');
             break;
 
           case 'player-cast-spell':
             triggerAction(event.payload.casterId, event.payload.spellId);
             break;
 
+          case 'player-auto-attacked':
+            if (event.payload.attackerId !== socket.id) {
+                triggerAction(event.payload.attackerId, 'autoAttack');
+            }
+            break;
+            
           case 'action-on-cooldown':
             if (event.payload.actionType === 'resetPlayer') {
               const seconds = Math.ceil(event.payload.remainingMs / 1000);

@@ -27,9 +27,15 @@ export const useCharacterAnimations = ({
   if (lastAction && playerRef.current && lastAction.timestamp > (playerRef.current as any)._lastProcessedAction) {
     const { actionId } = lastAction;
 
-    let animName = config.abilityAnimations[actionId];
-    if (!animName) {
-      animName = config.genericAnimations[actionId];
+    let animName: string | undefined;
+
+    if (actionId === 'autoAttack') {
+        animName = config.autoAttackAnimation;
+    } else {
+        animName = config.abilityAnimations[actionId];
+        if (!animName) {
+            animName = config.genericAnimations[actionId];
+        }
     }
 
     targetAction = (animName || config.attackAnimation) as ActionName;

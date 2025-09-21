@@ -19,6 +19,9 @@ interface InventorySlot {
 
 // deno-lint-ignore no-empty-interface
 export interface ResetPlayerPayload { }
+// deno-lint-ignore no-empty-interface
+export interface AutoAttackPayload { }
+
 
 export type PlayerClass = "Mage" | "Warrior";
 
@@ -42,6 +45,8 @@ export interface PlayerState {
   lastDotFlushTime?: number;
   animationState: AnimationState;
   resettingUntil?: number | null;
+  actionLockUntil?: number | null;
+  lastAutoAttackTime?: number;
 }
 
 export interface UseAbilityPayload {
@@ -50,8 +55,8 @@ export interface UseAbilityPayload {
 }
 
 export interface PlayerAction {
-  actionType: "useAbility" | "requestReset" | "useItem"; 
-  payload: UseAbilityPayload | ResetPlayerPayload | UseItemPayload;
+  actionType: "useAbility" | "requestReset" | "useItem" | "autoAttack";
+  payload: UseAbilityPayload | ResetPlayerPayload | UseItemPayload | AutoAttackPayload;
 }
 
 export type RaycastHitResult =

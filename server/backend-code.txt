@@ -423,8 +423,8 @@ import { statusEffectData } from './gameData/statusEffects.ts'
 import { GameEventManager } from "./gameEventManager.ts";
 import { GameEventType } from "./helpers/gameEvents.ts";
 import { classData } from "./gameData/classes.ts";
-import { ResetPlayerCommand } from "./commands/resetPlayerCommand.ts";
-import {UseItemCommand} from './commands/useItemCommand.ts' 
+import { RequestResetCommand } from "./commands/requestResetCommand.ts";
+import { UseItemCommand } from './commands/useItemCommand.ts'
 
 const RESPAWN_TIME_MS = 5000;
 const SPAWN_POINT = { x: 1, y: 1.5, z: 0.0 };
@@ -443,7 +443,7 @@ export class Game {
 
     this.actionHandlers = new Map();
     this.actionHandlers.set("useAbility", new UseAbilityCommand());
-    this.actionHandlers.set("resetPlayer", new ResetPlayerCommand());
+    this.actionHandlers.set("requestReset", new RequestResetCommand());
     this.actionHandlers.set("useItem", new UseItemCommand());
   }
 
@@ -554,6 +554,11 @@ export class Game {
     const alivePlayerInputs = new Map<string, PlayerInput>();
 
     for (const player of this.players.values()) {
+      if (player.resettingUntil && Date.now() >= player.resettingUntil) {
+        this.resetPlayer(player.id);
+        continue;
+      }
+
       if (player.status === 'dead') {
         if (player.respawnAt && Date.now() >= player.respawnAt) {
           this.resetPlayer(player.id);
@@ -561,6 +566,10 @@ export class Game {
       } else {
         this._processStatusEffects(player, deltaTime);
         this._regenerateMana(player, deltaTime);
+
+        if (player.resettingUntil) {
+          continue;
+        }
         const input = inputs.get(player.id);
         if (input) {
           const controller = this.physics.getPlayerController(player.id);
@@ -603,6 +612,7 @@ export class Game {
     player.respawnAt = null;
     player.activeStatusEffects = [];
     player.spellCooldowns.clear();
+    player.resettingUntil = null;
 
     this.physics.teleportPlayer(player.id, SPAWN_POINT);
 
@@ -802,7 +812,6 @@ export class PlayerController {
     const onGround = this.isOnGround();
     if (onGround) {
       this.velocity.y = -0.1;
-      // this.velocity.y = this.gravity * deltaTime;
       if (input.inputs.jump) {
         this.velocity.y = this.jumpStrength;
       }
@@ -895,6 +904,46 @@ export class UseItemCommand implements IActionCommand<UseItemPayload> {
     }
 }
 
+===== src/commands/requestResetCommand.ts =====
+import { Game } from "../game.ts";
+import { ResetPlayerPayload } from "../helpers/types.ts";
+import { IActionCommand } from "./actionCommands.ts";
+import { GameEventType } from "../helpers/gameEvents.ts";
+
+const PLAYER_RESET_COOLDOWN_MS = 30000;
+const PLAYER_RESET_DURATION_MS = 3000;
+
+export class RequestResetCommand implements IActionCommand<ResetPlayerPayload> {
+    execute(game: Game, playerId: string, _payload: ResetPlayerPayload): void {
+        const playerState = game.getPlayer(playerId);
+        if (!playerState || playerState.status === 'dead' || playerState.resettingUntil) {
+            return;
+        }
+
+        const now = Date.now();
+        const cooldownEndsAt = playerState.resetCooldownEndsAt ?? 0;
+
+        if (now < cooldownEndsAt) {
+            game.eventManager.queueEvent(
+                GameEventType.ActionOnCooldown,
+                { actionType: 'resetPlayer', remainingMs: cooldownEndsAt - now },
+                playerId 
+            );
+            return; 
+        }
+
+        playerState.resettingUntil = now + PLAYER_RESET_DURATION_MS;
+        playerState.resetCooldownEndsAt = now + PLAYER_RESET_COOLDOWN_MS;
+
+        game.eventManager.queueEvent(
+            GameEventType.PlayerResetStarted,
+            { playerId: playerId, duration: PLAYER_RESET_DURATION_MS }
+        );
+
+        console.log(`Player ${playerId} initiated a reset sequence (${PLAYER_RESET_DURATION_MS / 1000}s).`);
+    }
+}
+
 ===== src/commands/actionCommands.ts =====
 import { Game } from "../game.ts";
 import { UseAbilityPayload } from "../helpers/types.ts";
@@ -962,33 +1011,18 @@ export class UseAbilityCommand implements IActionCommand<UseAbilityPayload> {
             case 'projectile': {
                 const result = game.physics.castRayForSpell(playerId, payload.direction, ability.range);
 
-                switch (result.type) {
-                    case "player":
-                        game.applyDamage(result.playerId, ability.damage, playerId);
-                        if (ability.appliesEffectId) {
-                            game.applyStatusEffect(result.playerId, ability.appliesEffectId, playerId);
-                        }
-                        game.eventManager.queueEvent(GameEventType.SpellImpactPlayer, {
-                            spellId: ability.id,
-                            casterId: playerId,
-                            hitPlayerId: result.playerId,
-                            hitPoint: result.point,
-                        });
-                        break;
-                    case "world":
-                        game.eventManager.queueEvent(GameEventType.SpellImpactWorld, {
-                            spellId: ability.id,
-                            casterId: playerId,
-                            hitPoint: result.point,
-                        });
-                        break;
-                    case "miss":
-                        game.eventManager.queueEvent(
-                            GameEventType.SpellCastFailed,
-                            { reason: 'missed' },
-                            playerId
-                        );
-                        break;
+                if (result.type !== 'miss') {
+                    game.eventManager.queueEvent(GameEventType.AreaEffectTriggered, {
+                        effectId: 'spellImpact', 
+                        position: result.point,
+                    });
+                }
+                
+                if (result.type === 'player') {
+                    game.applyDamage(result.playerId, ability.damage, playerId);
+                    if (ability.appliesEffectId) {
+                        game.applyStatusEffect(result.playerId, ability.appliesEffectId, playerId);
+                    }
                 }
                 break;
             }
@@ -1000,9 +1034,17 @@ export class UseAbilityCommand implements IActionCommand<UseAbilityPayload> {
                         game.applyStatusEffect(hitPlayerId, ability.appliesEffectId, playerId);
                     }
                 }
+
+                const casterController = game.physics.getPlayerController(playerId);
+                if (casterController) {
+                    const casterPosition = casterController.getState().position;
+                    game.eventManager.queueEvent(GameEventType.AreaEffectTriggered, {
+                        effectId: ability.id,
+                        position: casterPosition,
+                    });
+                }
                 break;
             }
-
             case 'self_buff': {
                 game.applyStatusEffect(playerId, ability.appliesEffectId, playerId);
                 break;
@@ -1011,50 +1053,12 @@ export class UseAbilityCommand implements IActionCommand<UseAbilityPayload> {
     }
 }
 
-===== src/commands/resetPlayerCommand.ts =====
-import { Game } from "../game.ts";
-import { ResetPlayerPayload } from "../helpers/types.ts";
-import { IActionCommand } from "./actionCommands.ts";
-import {GameEventType} from "../helpers/gameEvents.ts";
-
-const PLAYER_RESET_COOLDOWN_MS = 30000
-
-export class ResetPlayerCommand implements IActionCommand<ResetPlayerPayload> {
-    execute(game: Game, playerId: string, _payload: ResetPlayerPayload): void {
-        const playerState = game.getPlayer(playerId);
-        if (!playerState) {
-            console.warn(`Attempted to reset non-existent player: ${playerId}`);
-            return;
-        }
-
-        const now = Date.now();
-        const cooldownEndsAt = playerState.resetCooldownEndsAt ?? 0;
-
-        if (now < cooldownEndsAt) {
-            const remainingMs = cooldownEndsAt - now;
-            console.log(`Player ${playerId} reset is on cooldown. ${Math.ceil(remainingMs / 1000)}s remaining.`);
-            
-            game.eventManager.queueEvent(
-                GameEventType.ActionOnCooldown,
-                { actionType: 'resetPlayer', remainingMs },
-                playerId 
-            );
-            return; 
-        }
-
-        game.resetPlayer(playerId);
-
-        playerState.resetCooldownEndsAt = now + PLAYER_RESET_COOLDOWN_MS;
-    }
-}
-
-
 ===== src/helpers/gameEvents.ts =====
 export enum GameEventType {
+  AreaEffectTriggered = 'area-effect-triggered',
+
   PlayerDamaged = 'player-damaged',
   PlayerDeath = 'player-death',
-  SpellImpactPlayer = 'spell-impact-player',
-  SpellImpactWorld = 'spell-impact-world',
 
   StatusEffectGained = 'status-effect-gained',
   StatusEffectLost = 'status-effect-lost',
@@ -1065,9 +1069,17 @@ export enum GameEventType {
   PlayerRespawn = 'player-respawn',
   PlayerCastSpell = 'player-cast-spell',
   ActionOnCooldown = 'action-on-cooldown',
+
+  PlayerResetStarted = 'player-reset-started',
+
 }
 
 export interface GameEventPayloads {
+  [GameEventType.AreaEffectTriggered]: {
+    effectId: string;
+    position: { x: number, y: number, z: number };
+  };
+
   [GameEventType.PlayerDamaged]: {
     playerId: string;
     damage: number;
@@ -1083,17 +1095,7 @@ export interface GameEventPayloads {
     playerId: string;
     killerId: string;
   };
-  [GameEventType.SpellImpactPlayer]: {
-    spellId: string;
-    casterId: string;
-    hitPlayerId: string;
-    hitPoint: { x: number, y: number, z: number };
-  };
-  [GameEventType.SpellImpactWorld]: {
-    spellId: string;
-    casterId: string;
-    hitPoint: { x: number, y: number, z: number };
-  };
+
   [GameEventType.StatusEffectGained]: {
     targetId: string;
     effectId: string;
@@ -1120,6 +1122,10 @@ export interface GameEventPayloads {
   [GameEventType.ActionOnCooldown]: {
     actionType: string;
     remainingMs: number;
+  };
+  [GameEventType.PlayerResetStarted]: {
+    playerId: string;
+    duration: number; 
   };
 }
 
@@ -1166,7 +1172,7 @@ export interface ResetPlayerPayload { }
 export type PlayerClass = "Mage" | "Warrior";
 
 export interface UseItemPayload {
-    inventorySlot: number; 
+  inventorySlot: number;
 }
 
 export interface PlayerState {
@@ -1183,7 +1189,8 @@ export interface PlayerState {
   activeStatusEffects: ActiveStatusEffect[];
   accumulatedDotDamage?: number;
   lastDotFlushTime?: number;
-  animationState: AnimationState
+  animationState: AnimationState;
+  resettingUntil?: number | null;
 }
 
 export interface UseAbilityPayload {
@@ -1192,7 +1199,7 @@ export interface UseAbilityPayload {
 }
 
 export interface PlayerAction {
-  actionType: "useAbility" | "resetPlayer" | "useItem";
+  actionType: "useAbility" | "requestReset" | "useItem"; 
   payload: UseAbilityPayload | ResetPlayerPayload | UseItemPayload;
 }
 

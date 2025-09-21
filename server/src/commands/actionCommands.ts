@@ -4,6 +4,8 @@ import { abilityData, AbilityDefinition } from "../gameData/abilities.ts";
 import { classData } from "../gameData/classes.ts";
 import { GameEventType } from "../helpers/gameEvents.ts";
 
+const ABILITY_LOCK_DURATION_MS = 500;
+
 export interface IActionCommand<T> {
     execute(game: Game, playerId: string, payload: T): void;
 }
@@ -11,7 +13,7 @@ export interface IActionCommand<T> {
 export class UseAbilityCommand implements IActionCommand<UseAbilityPayload> {
     execute(game: Game, playerId: string, payload: UseAbilityPayload): void {
         const playerState = game.getPlayer(playerId);
-        if (!playerState || playerState.status === 'dead') {
+        if (!playerState || playerState.status === 'dead' || (playerState.actionLockUntil && Date.now() < playerState.actionLockUntil)) {
             return;
         }
 
@@ -47,9 +49,11 @@ export class UseAbilityCommand implements IActionCommand<UseAbilityPayload> {
             );
             return;
         }
-
+        
+        const now = Date.now();
+        playerState.actionLockUntil = now + ABILITY_LOCK_DURATION_MS;
         playerState.mana -= ability.manaCost;
-        playerState.spellCooldowns.set(ability.id, Date.now() + ability.cooldown * 1000);
+        playerState.spellCooldowns.set(ability.id, now + ability.cooldown * 1000);
 
         game.eventManager.queueEvent(GameEventType.PlayerCastSpell, {
             casterId: playerId,
